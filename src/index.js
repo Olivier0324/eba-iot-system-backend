@@ -6,7 +6,7 @@ import dotenv from 'dotenv';
 import http from 'http';
 import { Server } from 'socket.io';
 import { SensorData } from './models/SensorData.js';
-
+import SensorRouter from './routes/SensorRoutes.js';
 dotenv.config();
 
 const app = express();
@@ -20,7 +20,7 @@ const io = new Server(server, {
 
 app.use(cors());
 app.use(express.json());
-
+app.use(express.static('public'));
 // ==================== MongoDB Connection ====================
 const connectDB = async () => {
     try {
@@ -63,7 +63,7 @@ io.on('connection', (socket) => {
     }
 
     socket.on('disconnect', () => {
-        console.log('🔌 Client disconnected:', socket.id);
+        console.log('Client disconnected:', socket.id);
     });
 });
 
@@ -83,7 +83,6 @@ mqttClient.on('message', async (topic, message) => {
         // Prepare data for real-time broadcast
         const dataToSend = {
             ...rawData,
-            _id: sensorData._id,
             timestamp: sensorData.createdAt
         };
 
@@ -98,18 +97,11 @@ mqttClient.on('message', async (topic, message) => {
 });
 
 // ==================== REST API Routes ====================
-app.get('/api/sensors/latest', (req, res) => {
-    res.json({ success: true, data: latestSensorData });
-});
-
-app.get('/api/sensors', async (req, res) => {
-    const data = await SensorData.find().sort({ createdAt: -1 , updatedAt: -1}).limit(50);
-    res.json({ success: true, data });
-});
-
-app.get('/health', (req, res) => {
-    res.json({ status: 'OK' });
-});
+app.get('/', (req, res) => {
+    
+    res.send('Welcome to IoT Data API');
+})
+app.use('/api/v1/sensor', SensorRouter);
 
 // ==================== Start Server ====================
 const PORT = process.env.PORT || 3000;
