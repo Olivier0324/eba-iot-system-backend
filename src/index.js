@@ -7,6 +7,8 @@ import http from 'http';
 import { Server } from 'socket.io';
 import { SensorData } from './models/SensorData.js';
 import SensorRouter from './routes/SensorRoutes.js';
+import reportRoutes from "./routes/ReportRoutes.js";
+
 dotenv.config();
 
 const app = express();
@@ -102,6 +104,7 @@ app.get('/', (req, res) => {
     res.send('Welcome to IoT Data API');
 })
 app.use('/api/v1/sensor', SensorRouter);
+app.use("/api/v1/reports", reportRoutes);
 
 // ==================== Start Server ====================
 const PORT = process.env.PORT || 3000;
