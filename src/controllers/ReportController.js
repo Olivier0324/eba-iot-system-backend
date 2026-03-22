@@ -1,11 +1,18 @@
 import { SensorData } from '../models/SensorData.js';
 import { generatePDF } from "../services/PdfService.js";
+import { buildQuery } from '../utils/buildQuery.js';
 
 export const createReport = async (req, res) => {
     try {
-        const data = await SensorData.find().sort({ timestamp: 1 });
+        const filter = buildQuery(req.query);
 
-        const filePath = await generatePDF(data);
+        const data = await SensorData.find(filter).sort({ timestamp: 1 });
+
+        if (!data.length) {
+            return res.status(404).json({ message: "No data found" });
+        }
+
+        const filePath = await generatePDF(data, req.query);
 
         res.download(filePath);
     } catch (err) {
