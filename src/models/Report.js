@@ -1,3 +1,4 @@
+// models/Report.js
 import mongoose from 'mongoose';
 
 const ReportSchema = new mongoose.Schema({
@@ -11,57 +12,38 @@ const ReportSchema = new mongoose.Schema({
     },
     reportType: {
         type: String,
-        enum: ['summary', 'detailed', 'statistics'],
-        required: true
+        required: true,
+        default: 'daily',
+        enum: ['daily', 'weekly', 'monthly', 'custom']
     },
-    duration: {
+    filePath: {
         type: String,
-        enum: ['weekly', '14days', '1month', '3month', 'custom'],
-        required: true
-    },
-    startDate: {
-        type: Date,
-        required: true
-    },
-    endDate: {
-        type: Date,
-        required: true
+        required: true,
+        // Store relative path from project root
+        get: function (value) {
+            // When retrieving, ensure path is correct
+            return value;
+        }
     },
     fileSize: {
         type: Number,
         required: true
     },
-    filePath: {
-        type: String,
-        required: true
+    downloadCount: {
+        type: Number,
+        default: 0
     },
-    status: {
-        type: String,
-        enum: ['draft', 'ready', 'archived'],
-        default: 'ready'
-    },
-    site: {
-        type: String,
-        default: 'All Sites'
-    },
-    tags: [{
-        type: String
-    }],
-    createdBy: {
-        type: String,
-        default: 'System'
-    },
-    createdAt: {
-        type: Date,
-        default: Date.now
+    metadata: {
+        type: mongoose.Schema.Types.Mixed,
+        default: {}
     }
 }, {
     timestamps: true
 });
 
-// Index for efficient querying
-ReportSchema.index({ createdAt: -1 });
-ReportSchema.index({ reportType: 1, createdAt: -1 });
-ReportSchema.index({ site: 1 });
+// Virtual to get absolute path when needed
+ReportSchema.virtual('absolutePath').get(function () {
+    return path.join(process.cwd(), this.filePath);
+});
 
-export default mongoose.model('Report', ReportSchema);
+export const Report = mongoose.model('Report', ReportSchema);

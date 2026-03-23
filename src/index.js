@@ -4,6 +4,7 @@ import mqtt from 'mqtt';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import http from 'http';
+import path from 'path';
 import { Server } from 'socket.io';
 import { SensorData } from './models/SensorData.js';
 import SensorRouter from './routes/SensorRoutes.js';
@@ -23,6 +24,8 @@ const io = new Server(server, {
 app.use(cors());
 app.use(express.json());
 app.use(express.static('public'));
+app.use('/reports', express.static(path.join(process.cwd(), 'uploads', 'reports')));
+
 // ==================== MongoDB Connection ====================
 const connectDB = async () => {
     try {
