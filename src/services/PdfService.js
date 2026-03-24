@@ -17,7 +17,7 @@ export const generatePDF = async (data, options) => {
     const filePath = path.join(reportsDir, fileName);
 
     const doc = new PDFDocument({
-        margin: 50,
+        margin: 40,
         size: 'A4',
         info: {
             Title: 'EBA SYSTEM REPORT',
@@ -55,7 +55,7 @@ export const generatePDF = async (data, options) => {
             .fontSize(styles.small.fontSize)
             .font('Helvetica')
             .text(
-                `ECOBASED SYSTEM - Confidential | Page ${pageNumber}`,
+                `ECOBASED SYSTEM - Confidential              | Page ${pageNumber}`,
                 50,
                 doc.page.height - 40,
                 { align: 'center', width: doc.page.width - 100 }
@@ -380,7 +380,6 @@ export const generatePDF = async (data, options) => {
     // Verify file
     if (fs.existsSync(filePath)) {
         const stats = fs.statSync(filePath);
-        console.log("PDF file size:", stats.size, "bytes");
 
         if (stats.size === 0) {
             throw new Error("Generated PDF file is empty");
