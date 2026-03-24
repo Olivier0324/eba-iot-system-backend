@@ -12,25 +12,27 @@ export const login = async (req, res) => {
         }
 
         const isPasswordValid = await bcrypt.compare(password, user.password);
+        
         if (!isPasswordValid) {
             return res.status(400).json({ message: "Invalid password" });
         }
 
-        // sending otp
-        // In login function
+
 
         const otp = String(Math.floor(100000 + Math.random() * 900000));
-
-        // FIXED: Changed variable name to otpExpiresAt to match verifyOTP
         const otpExpiresAt = Date.now() + 5 * 60 * 1000;
 
-        // FIXED: Updated the database field name
+        // updating user
         await User.findByIdAndUpdate(user._id, { otp, otpExpiresAt });
 
         // It is better to await the email sending to catch errors, though not strictly required for the logic
         await sendOTP(user.email, otp);
+    
 
-        res.status(200).json({ message: "OTP sent to your email" });
+        res.status(200).json({
+            message: "OTP sent to your email",
+            email: user.email
+         });
 
     } catch (error) {
         console.log(error);
@@ -79,3 +81,31 @@ export const verifyOTP = async (req, res) => {
         res.status(500).json({ message: "Internal server error" });
     }
 };
+
+// resend otp
+export const resendOTP = async (req, res) => {
+    const { email } = req.body;
+
+    try {
+        const user = await User.findOne({ email });
+        if (!user) {
+            return res.status(404).json({ message: "User not found" });
+        }
+
+        const otp = String(Math.floor(100000 + Math.random() * 900000));
+        const otpExpiresAt = Date.now() + 5 * 60 * 1000;
+
+        // updating user
+        await User.findByIdAndUpdate(user._id, { otp, otpExpiresAt });
+
+        // It is better to await the email sending to catch errors, though not strictly required for the logic  
+        await sendOTP(user.email, otp);
+
+        res.status(200).json({ message: "OTP sent to your email" });
+
+    } catch (error) {
+        console.log(error);
+        res.status(500).json({ message: "Internal server error" });
+
+    }
+}
