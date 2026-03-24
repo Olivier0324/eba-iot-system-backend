@@ -1,5 +1,4 @@
 import express from 'express';
-import mongoose from 'mongoose';
 import mqtt from 'mqtt';
 import cors from 'cors';
 import dotenv from 'dotenv';
@@ -9,6 +8,8 @@ import { Server } from 'socket.io';
 import { SensorData } from './models/SensorData.js';
 import SensorRouter from './routes/SensorRoutes.js';
 import reportRoutes from "./routes/ReportRoutes.js";
+import authRoutes from "./routes/AuthRoutes.js";
+import { connectDB } from './config/database.js';
 
 dotenv.config();
 
@@ -27,15 +28,7 @@ app.use(express.static('public'));
 app.use('/reports', express.static(path.join(process.cwd(), 'uploads', 'reports')));
 
 // ==================== MongoDB Connection ====================
-const connectDB = async () => {
-    try {
-        await mongoose.connect(process.env.MONGODB_URI);
-        console.log('MongoDB Connected');
-    } catch (error) {
-        console.error('MongoDB Connection Error:', error.message);
-        process.exit(1);
-    }
-};
+
 connectDB();
 
 // ==================== MQTT Configuration ====================
@@ -108,6 +101,7 @@ app.get('/', (req, res) => {
 })
 app.use('/api/v1/sensor', SensorRouter);
 app.use("/api/v1/reports", reportRoutes);
+app.use("/api/v1/auth", authRoutes);
 
 // ==================== Start Server ====================
 const PORT = process.env.PORT || 3000;
