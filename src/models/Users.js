@@ -1,3 +1,4 @@
+// models/Users.js
 import mongoose from "mongoose";
 
 const UserSchema = new mongoose.Schema({
@@ -9,17 +10,16 @@ const UserSchema = new mongoose.Schema({
         type: String,
         required: true,
         unique: true,
-
     },
     password: {
         type: String,
         required: true,
     },
     role: {
-        type: String, // Add the type explicitly
-        enum: ['admin', 'user', 'manager'], // Corrected property name
-        required: true
-
+        type: String,
+        enum: ['admin', 'user', 'manager'],
+        required: true,
+        default: 'user'
     },
     otp: {
         type: String,
@@ -32,10 +32,23 @@ const UserSchema = new mongoose.Schema({
     otpExpiresAt: {
         type: Date,
         default: null
+    },
+    isLoggedIn: {
+        type: Boolean,
+        default: false
+    },
+    lastLogin: {
+        type: Date,
+    },
+    lastLogout: {
+        type: Date,
+    },
+    isActive: {
+        type: Boolean,
+        default: true  // Changed to true by default for new users
     }
 }, {
     timestamps: true
 });
-
 
 export const User = mongoose.model('User', UserSchema);
