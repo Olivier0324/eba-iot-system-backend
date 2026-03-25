@@ -1,33 +1,33 @@
+// index.js
 import express from 'express';
 import mqtt from 'mqtt';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import http from 'http';
 import path from 'path';
-import { Server } from 'socket.io';
+import { initSocket, getIo } from './services/SocketService.js';
 import { SensorData } from './models/SensorData.js';
 import SensorRouter from './routes/SensorRoutes.js';
 import reportRoutes from "./routes/ReportRoutes.js";
 import authRoutes from "./routes/AuthRoutes.js";
+import alertRoutes from './routes/AlertRoutes.js';
+import controlRoutes from './routes/ControlRoutes.js';
+import notificationRoutes from './routes/NotificationRoutes.js';
 import { connectDB } from './config/database.js';
+import AlertService from './services/AlertService.js';
 
 dotenv.config();
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, {
-    cors: {
-        origin: "*", // Configure appropriately for production
-        methods: ["GET", "POST"]
-    }
-});
+
+// Initialize Socket.IO
+const io = initSocket(server);
 
 app.use(cors());
 app.use(express.json());
 app.use(express.static('public'));
 app.use('/reports', express.static(path.join(process.cwd(), 'uploads', 'reports')));
-
-// ==================== MongoDB Connection ====================
 
 connectDB();
 
@@ -50,61 +50,103 @@ const mqttClient = mqtt.connect({
 
 // Store latest data
 let latestSensorData = null;
+let latestDeviceStatus = null;
+const pendingRequests = new Map();
 
-// ==================== Socket.IO Connection ====================
-io.on('connection', (socket) => {
-    console.log('🔌 Client connected:', socket.id);
+// ==================== MQTT Subscriptions ====================
+mqttClient.on('connect', () => {
+    console.log('✅ MQTT Connected');
 
-    // Send latest data immediately when client connects
-    if (latestSensorData) {
-        socket.emit('sensor-data', latestSensorData);
-    }
+    const topics = [
+        mqttConfig.topic,
+        `${mqttConfig.username}/control/ack`,
+        `${mqttConfig.username}/control/status`,
+        `${mqttConfig.username}/control/startup`
+    ];
 
-    socket.on('disconnect', () => {
-        console.log('Client disconnected:', socket.id);
+    topics.forEach(topic => {
+        mqttClient.subscribe(topic, (err) => {
+            if (!err) console.log(`📡 Subscribed to: ${topic}`);
+            else console.error(`❌ Failed to subscribe to ${topic}:`, err);
+        });
     });
 });
 
-// ==================== Process MQTT Messages ====================
-mqttClient.on('connect', () => {
-    console.log(' MQTT Connected');
-    mqttClient.subscribe(mqttConfig.topic);
-});
-
+// ==================== Message Handler ====================
 mqttClient.on('message', async (topic, message) => {
     try {
-        const rawData = JSON.parse(message.toString());
-        // Save to MongoDB
-        const sensorData = new SensorData(rawData);
-        await sensorData.save();
+        const payload = JSON.parse(message.toString());
+        console.log(`📨 Message on ${topic.split('/').pop()}:`, payload);
 
-        // Prepare data for real-time broadcast
-        const dataToSend = {
-            ...rawData,
-            timestamp: sensorData.createdAt
-        };
+        if (topic === mqttConfig.topic) {
+            const sensorData = new SensorData(payload);
+            await sensorData.save();
+            const alerts = await AlertService.checkAndCreateAlerts(sensorData);
 
-        latestSensorData = dataToSend;
+            const dataToSend = { ...payload, timestamp: sensorData.createdAt };
+            latestSensorData = dataToSend;
 
-        // BROADCAST TO ALL CONNECTED SOCKET.IO CLIENTS 
-        io.emit('sensor-data', dataToSend);
+            // Broadcast to all clients
+            const io = getIo();
+            io.emit('sensor-data', dataToSend);
+
+            if (alerts?.length) {
+                console.log(`⚠️ Created ${alerts.length} new alerts`);
+                io.emit('new-alerts', alerts);
+            }
+        }
+        else if (topic.includes('/control/status')) {
+            console.log('📊 Device status received:', payload);
+            latestDeviceStatus = payload;
+            const io = getIo();
+            io.emit('device-status', payload);
+
+            if (payload.requestId && pendingRequests.has(payload.requestId)) {
+                const { resolve } = pendingRequests.get(payload.requestId);
+                resolve(payload);
+                pendingRequests.delete(payload.requestId);
+            }
+        }
+        else if (topic.includes('/control/ack')) {
+            console.log('✅ Acknowledgment received:', payload);
+            const io = getIo();
+            io.emit('control-ack', payload);
+
+            if (payload.requestId && pendingRequests.has(payload.requestId)) {
+                const { resolve } = pendingRequests.get(payload.requestId);
+                resolve(payload);
+                pendingRequests.delete(payload.requestId);
+            }
+        }
+        else if (topic.includes('/control/startup')) {
+            console.log('🚀 Device startup:', payload);
+            latestDeviceStatus = payload;
+            const io = getIo();
+            io.emit('device-startup', payload);
+        }
 
     } catch (error) {
-        console.error('Error:', error.message);
+        console.error('Error processing MQTT message:', error.message);
     }
 });
 
 // ==================== REST API Routes ====================
-app.get('/', (req, res) => {
-    
-    res.send('Welcome to IoT Data API');
-})
+app.get('/', (req, res) => res.send('IoT Data API'));
 app.use('/api/v1/sensor', SensorRouter);
 app.use("/api/v1/reports", reportRoutes);
 app.use("/api/v1/auth", authRoutes);
+app.use("/api/v1/alerts", alertRoutes);
+app.use("/api/v1/control", controlRoutes);
+app.use("/api/v1/notifications", notificationRoutes);
 
-// ==================== Start Server ====================
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+// Error handling
+app.use((err, req, res, next) => {
+    console.error(err.stack);
+    res.status(500).json({ success: false, error: err.message });
 });
+
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+
+// Export for use in other modules
+export { mqttClient, pendingRequests, getIo };

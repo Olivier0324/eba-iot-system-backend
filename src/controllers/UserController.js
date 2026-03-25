@@ -1,111 +1,376 @@
+// controllers/AuthController.js
 import { User } from "../models/Users.js";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import { sendOTP } from "../utils/sendEmail.js";
 
+// Login - Send OTP
 export const login = async (req, res) => {
     const { email, password } = req.body;
+
     try {
+        // Validate input
+        if (!email || !password) {
+            return res.status(400).json({
+                success: false,
+                message: "Email and password are required"
+            });
+        }
+
         const user = await User.findOne({ email });
         if (!user) {
-            return res.status(404).json({ message: "User not found" });
+            return res.status(404).json({
+                success: false,
+                message: "User not found"
+            });
         }
 
+        // Check if account is active
+        if (!user.isActive) {
+            return res.status(401).json({
+                success: false,
+                message: "Account is disabled. Please contact administrator."
+            });
+        }
+
+        // Verify password
         const isPasswordValid = await bcrypt.compare(password, user.password);
-        
         if (!isPasswordValid) {
-            return res.status(400).json({ message: "Invalid password" });
+            return res.status(400).json({
+                success: false,
+                message: "Invalid password"
+            });
         }
 
-
-
+        // Generate OTP
         const otp = String(Math.floor(100000 + Math.random() * 900000));
-        const otpExpiresAt = Date.now() + 5 * 60 * 1000;
+        const otpExpiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
 
-        // updating user
-        await User.findByIdAndUpdate(user._id, { otp, otpExpiresAt });
+        // Update user with OTP
+        await User.findByIdAndUpdate(user._id, {
+            otp,
+            otpExpiresAt
+        });
 
-        // It is better to await the email sending to catch errors, though not strictly required for the logic
+        // Send OTP email
         await sendOTP(user.email, otp);
-    
 
         res.status(200).json({
+            success: true,
             message: "OTP sent to your email",
-            email: user.email
-         });
+            data: {
+                email: user.email,
+                expiresIn: 300 // 5 minutes in seconds
+            }
+        });
 
     } catch (error) {
-        console.log(error);
-        res.status(500).json({ message: "Internal server error" });
+        console.error("Login error:", error);
+        res.status(500).json({
+            success: false,
+            message: "Internal server error"
+        });
     }
 };
 
+// Verify OTP and Complete Login
 export const verifyOTP = async (req, res) => {
     const { otp, email } = req.body;
 
     try {
+        // Validate input
+        if (!otp || !email) {
+            return res.status(400).json({
+                success: false,
+                message: "OTP and email are required"
+            });
+        }
+
         const user = await User.findOne({ email });
         if (!user) {
-            return res.status(404).json({ message: "User not found" });
+            return res.status(404).json({
+                success: false,
+                message: "User not found"
+            });
         }
 
-        // Check if OTP matches and is not expired
-        // Note: Ensure you are comparing strings if the OTP comes from req.body as a string
-        if (user.otp !== otp || user.otpExpiresAt < Date.now()) {
-            return res.status(400).json({ message: "Invalid or expired OTP" });
+        // Check if account is active
+        if (!user.isActive) {
+            return res.status(401).json({
+                success: false,
+                message: "Account is disabled"
+            });
         }
 
-        // updating isVerified
+        // Verify OTP
+        if (user.otp !== otp) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid OTP"
+            });
+        }
+
+        // Check OTP expiration
+        if (user.otpExpiresAt < new Date()) {
+            return res.status(400).json({
+                success: false,
+                message: "OTP has expired. Please request a new one."
+            });
+        }
+
+        // Update user login status
         user.isVerified = true;
+        user.isLoggedIn = true;
+        user.lastLogin = new Date();
         user.otp = undefined;
         user.otpExpiresAt = undefined;
 
         await user.save();
 
-        // generating token
-        const token = jwt.sign({
+        // Generate JWT token
+        const token = jwt.sign(
+            {
+                id: user._id,
+                username: user.username,
+                email: user.email,
+                role: user.role
+            },
+            process.env.JWT_SECRET,
+            { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+        );
+
+        // Prepare user data for response (exclude sensitive fields)
+        const userData = {
             id: user._id,
             username: user.username,
             email: user.email,
             role: user.role,
-        }, process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES_IN });
+            isActive: user.isActive,
+            lastLogin: user.lastLogin,
+            createdAt: user.createdAt
+        };
 
-        const { password, ...rest } = user._doc;
         res.status(200).json({
+            success: true,
             message: "Login successful",
-            token,
-            user: rest
+            data: {
+                token,
+                user: userData
+            }
         });
+
     } catch (error) {
-        console.log(error);
-        res.status(500).json({ message: "Internal server error" });
+        console.error("OTP verification error:", error);
+        res.status(500).json({
+            success: false,
+            message: "Internal server error"
+        });
     }
 };
 
-// resend otp
+// Resend OTP
 export const resendOTP = async (req, res) => {
     const { email } = req.body;
 
     try {
-        const user = await User.findOne({ email });
-        if (!user) {
-            return res.status(404).json({ message: "User not found" });
+        if (!email) {
+            return res.status(400).json({
+                success: false,
+                message: "Email is required"
+            });
         }
 
+        const user = await User.findOne({ email });
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: "User not found"
+            });
+        }
+
+        // Check if account is active
+        if (!user.isActive) {
+            return res.status(401).json({
+                success: false,
+                message: "Account is disabled"
+            });
+        }
+
+        // Generate new OTP
         const otp = String(Math.floor(100000 + Math.random() * 900000));
-        const otpExpiresAt = Date.now() + 5 * 60 * 1000;
+        const otpExpiresAt = new Date(Date.now() + 5 * 60 * 1000);
 
-        // updating user
-        await User.findByIdAndUpdate(user._id, { otp, otpExpiresAt });
+        // Update user
+        await User.findByIdAndUpdate(user._id, {
+            otp,
+            otpExpiresAt
+        });
 
-        // It is better to await the email sending to catch errors, though not strictly required for the logic  
+        // Send new OTP
         await sendOTP(user.email, otp);
 
-        res.status(200).json({ message: "OTP sent to your email" });
+        res.status(200).json({
+            success: true,
+            message: "New OTP sent to your email",
+            data: {
+                expiresIn: 300
+            }
+        });
 
     } catch (error) {
-        console.log(error);
-        res.status(500).json({ message: "Internal server error" });
-
+        console.error("Resend OTP error:", error);
+        res.status(500).json({
+            success: false,
+            message: "Internal server error"
+        });
     }
-}
+};
+
+// Logout
+export const logout = async (req, res) => {
+    try {
+        const userId = req.user.id; // From auth middleware
+
+        // Update user's login status
+        await User.findByIdAndUpdate(userId, {
+            isLoggedIn: false,
+            lastLogout: new Date()
+        });
+
+        res.status(200).json({
+            success: true,
+            message: "Logged out successfully"
+        });
+    } catch (error) {
+        console.error("Logout error:", error);
+        res.status(500).json({
+            success: false,
+            message: "Internal server error"
+        });
+    }
+};
+
+// Get Current User Profile
+export const getCurrentUser = async (req, res) => {
+    try {
+        const user = await User.findById(req.user.id).select('-password -otp -otpExpiresAt');
+
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: "User not found"
+            });
+        }
+
+        res.status(200).json({
+            success: true,
+            data: user
+        });
+    } catch (error) {
+        console.error("Get current user error:", error);
+        res.status(500).json({
+            success: false,
+            message: "Internal server error"
+        });
+    }
+};
+
+// Change Password
+export const changePassword = async (req, res) => {
+    const { currentPassword, newPassword } = req.body;
+
+    try {
+        if (!currentPassword || !newPassword) {
+            return res.status(400).json({
+                success: false,
+                message: "Current password and new password are required"
+            });
+        }
+
+        const user = await User.findById(req.user.id);
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: "User not found"
+            });
+        }
+
+        // Verify current password
+        const isPasswordValid = await bcrypt.compare(currentPassword, user.password);
+        if (!isPasswordValid) {
+            return res.status(400).json({
+                success: false,
+                message: "Current password is incorrect"
+            });
+        }
+
+        // Hash new password
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+        // Update password and force re-login
+        user.password = hashedPassword;
+        user.isLoggedIn = false;
+        await user.save();
+
+        res.status(200).json({
+            success: true,
+            message: "Password changed successfully. Please login again."
+        });
+    } catch (error) {
+        console.error("Change password error:", error);
+        res.status(500).json({
+            success: false,
+            message: "Internal server error"
+        });
+    }
+};
+
+// Update User Profile
+export const updateProfile = async (req, res) => {
+    const { username, email } = req.body;
+
+    try {
+        const user = await User.findById(req.user.id);
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: "User not found"
+            });
+        }
+
+        // Check if email is already taken by another user
+        if (email && email !== user.email) {
+            const existingUser = await User.findOne({ email, _id: { $ne: user._id } });
+            if (existingUser) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Email already in use"
+                });
+            }
+            user.email = email;
+        }
+
+        if (username) user.username = username;
+
+        await user.save();
+
+        const userData = {
+            id: user._id,
+            username: user.username,
+            email: user.email,
+            role: user.role
+        };
+
+        res.status(200).json({
+            success: true,
+            message: "Profile updated successfully",
+            data: userData
+        });
+    } catch (error) {
+        console.error("Update profile error:", error);
+        res.status(500).json({
+            success: false,
+            message: "Internal server error"
+        });
+    }
+};
