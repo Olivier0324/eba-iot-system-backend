@@ -320,107 +320,253 @@ class AlertService {
         }
     }
 
-    async sendEmailNotifications(alert) {
-        try {
-            const users = await User.find({
-                role: { $in: ['admin', 'manager'] },
-                isActive: true
-            });
+   async sendEmailNotifications(alert) {
+    try {
+        const users = await User.find({
+            role: { $in: ['admin', 'manager'] },
+            isActive: true
+        });
 
-            const severityColors = {
-                emergency: '#dc3545',
-                critical: '#fd7e14',
-                warning: '#ffc107',
-                info: '#17a2b8'
-            };
+        const severityConfig = {
+            emergency: {
+                color: '#dc3545',
+                bgLight: '#f8d7da',
+                bgDark: '#dc3545',
+                text: 'white',
+                icon: '🚨'
+            },
+            critical: {
+                color: '#fd7e14',
+                bgLight: '#ffe5d0',
+                bgDark: '#fd7e14',
+                text: 'white',
+                icon: '⚠️'
+            },
+            warning: {
+                color: '#ffc107',
+                bgLight: '#fff3cd',
+                bgDark: '#ffc107',
+                text: '#333',
+                icon: '🔔'
+            },
+            info: {
+                color: '#17a2b8',
+                bgLight: '#d1ecf1',
+                bgDark: '#17a2b8',
+                text: 'white',
+                icon: 'ℹ️'
+            }
+        };
 
-            const severityColor = severityColors[alert.severity] || '#6c757d';
+        const config = severityConfig[alert.severity] || severityConfig.info;
 
-            for (const user of users) {
-                await sendEmail({
-                    to: user.email,
-                    subject: `[EBA System] ${alert.severity.toUpperCase()}: ${alert.title}`,
-                    html: `
-                        <!DOCTYPE html>
-                        <html>
-                        <head>
-                            <meta charset="UTF-8">
-                            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                            <title>EBA System Alert</title>
-                        </head>
-                        <body style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 0; background-color: #f4f4f4;">
-                            <div style="max-width: 600px; margin: 20px auto; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
-                                <div style="background: ${severityColor}; padding: 25px 20px; text-align: center;">
-                                    <h1 style="color: white; margin: 0; font-size: 24px;">EBA Environmental Monitoring System</h1>
-                                    <p style="color: rgba(255,255,255,0.9); margin: 10px 0 0 0; font-size: 14px;">Alert Notification</p>
+        for (const user of users) {
+            await sendEmail({
+                to: user.email,
+                subject: `[EBA System] ${alert.severity.toUpperCase()}: ${alert.title}`,
+                html: `
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                        <meta charset="UTF-8">
+                        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                        <title>EBA System Alert</title>
+                        <style>
+                            body {
+                                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                                margin: 0;
+                                padding: 0;
+                                background-color: #f4f4f4;
+                            }
+                            .container {
+                                max-width: 600px;
+                                margin: 20px auto;
+                                background: white;
+                                border-radius: 8px;
+                                overflow: hidden;
+                                box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                            }
+                            .header {
+                                background: ${config.bgDark};
+                                padding: 25px 20px;
+                                text-align: center;
+                            }
+                            .header h1 {
+                                color: ${config.text};
+                                margin: 0;
+                                font-size: 24px;
+                            }
+                            .header p {
+                                color: ${config.text === 'white' ? 'rgba(255,255,255,0.9)' : 'rgba(51,51,51,0.9)'};
+                                margin: 10px 0 0 0;
+                                font-size: 14px;
+                            }
+                            .icon {
+                                font-size: 48px;
+                                margin-bottom: 10px;
+                                display: block;
+                            }
+                            .content {
+                                padding: 25px;
+                            }
+                            .alert-title {
+                                border-left: 4px solid ${config.color};
+                                padding-left: 15px;
+                                margin-bottom: 20px;
+                            }
+                            .alert-title h2 {
+                                color: #333;
+                                margin: 0 0 5px 0;
+                                font-size: 20px;
+                            }
+                            .alert-title p {
+                                color: ${config.color};
+                                margin: 0;
+                                font-weight: bold;
+                                text-transform: uppercase;
+                            }
+                            .message-box {
+                                background: #f8f9fa;
+                                padding: 15px;
+                                border-radius: 6px;
+                                margin-bottom: 20px;
+                            }
+                            .details-table {
+                                width: 100%;
+                                border-collapse: collapse;
+                                margin-bottom: 20px;
+                            }
+                            .details-table td {
+                                padding: 8px 0;
+                                border-bottom: 1px solid #e9ecef;
+                            }
+                            .details-table td:first-child {
+                                color: #6c757d;
+                            }
+                            .details-table td:last-child {
+                                color: #495057;
+                                font-weight: bold;
+                            }
+                            .actions-box {
+                                background: ${config.bgLight};
+                                padding: 15px;
+                                border-radius: 6px;
+                                margin-bottom: 20px;
+                            }
+                            .actions-box p:first-child {
+                                margin: 0 0 5px 0;
+                                color: #495057;
+                                font-weight: bold;
+                            }
+                            .actions-box p:last-child {
+                                margin: 0;
+                                color: #6c757d;
+                                font-size: 14px;
+                            }
+                            .divider {
+                                border: none;
+                                border-top: 1px solid #e9ecef;
+                                margin: 20px 0;
+                            }
+                            .button-container {
+                                text-align: center;
+                            }
+                            .button {
+                                display: inline-block;
+                                background: #2E7D32;
+                                color: white;
+                                text-decoration: none;
+                                padding: 10px 20px;
+                                border-radius: 5px;
+                                font-size: 14px;
+                            }
+                            .footer {
+                                background: #f8f9fa;
+                                padding: 15px;
+                                text-align: center;
+                                border-top: 1px solid #e9ecef;
+                            }
+                            .footer p {
+                                margin: 0 0 5px 0;
+                                color: #6c757d;
+                                font-size: 12px;
+                            }
+                            .footer p:last-child {
+                                margin: 5px 0 0 0;
+                                color: #adb5bd;
+                                font-size: 11px;
+                            }
+                        </style>
+                    </head>
+                    <body>
+                        <div class="container">
+                            <div class="header">
+                                <span class="icon">${config.icon}</span>
+                                <h1>EBA Environmental Monitoring System</h1>
+                                <p>Alert Notification</p>
+                            </div>
+                            
+                            <div class="content">
+                                <div class="alert-title">
+                                    <h2>${alert.title}</h2>
+                                    <p>${alert.severity} Level</p>
                                 </div>
                                 
-                                <div style="padding: 25px;">
-                                    <div style="border-left: 4px solid ${severityColor}; padding-left: 15px; margin-bottom: 20px;">
-                                        <h2 style="color: #333; margin: 0 0 5px 0; font-size: 20px;">${alert.title}</h2>
-                                        <p style="color: ${severityColor}; margin: 0; font-weight: bold; text-transform: uppercase;">${alert.severity} Level</p>
-                                    </div>
-                                    
-                                    <div style="background: #f8f9fa; padding: 15px; border-radius: 6px; margin-bottom: 20px;">
-                                        <p style="margin: 0 0 10px 0; color: #555; line-height: 1.5;">${alert.message}</p>
-                                    </div>
-                                    
-                                    <div style="margin-bottom: 20px;">
-                                        <h3 style="color: #495057; font-size: 16px; margin: 0 0 10px 0;">Alert Details</h3>
-                                        <table style="width: 100%; border-collapse: collapse;">
-                                            <tr>
-                                                <td style="padding: 8px 0; border-bottom: 1px solid #e9ecef; color: #6c757d;">Parameter</td>
-                                                <td style="padding: 8px 0; border-bottom: 1px solid #e9ecef; color: #495057; font-weight: bold;">${alert.type.replace('_', ' ').toUpperCase()}</td>
-                                            </tr>
-                                            <tr>
-                                                <td style="padding: 8px 0; border-bottom: 1px solid #e9ecef; color: #6c757d;">Current Value</td>
-                                                <td style="padding: 8px 0; border-bottom: 1px solid #e9ecef; color: #495057; font-weight: bold;">${alert.value} ${THRESHOLDS[alert.type]?.unit || ''}</td>
-                                            </tr>
-                                            <tr>
-                                                <td style="padding: 8px 0; border-bottom: 1px solid #e9ecef; color: #6c757d;">Threshold</td>
-                                                <td style="padding: 8px 0; border-bottom: 1px solid #e9ecef; color: #495057; font-weight: bold;">${alert.threshold} ${THRESHOLDS[alert.type]?.unit || ''}</td>
-                                            </tr>
-                                            <tr>
-                                                <td style="padding: 8px 0; border-bottom: 1px solid #e9ecef; color: #6c757d;">Time Detected</td>
-                                                <td style="padding: 8px 0; border-bottom: 1px solid #e9ecef; color: #495057;">${new Date().toLocaleString()}</td>
-                                            </tr>
-                                        </table>
-                                    </div>
-                                    
-                                    <div style="background: #e9ecef; padding: 15px; border-radius: 6px; margin-bottom: 20px;">
-                                        <p style="margin: 0 0 5px 0; color: #495057; font-weight: bold;">Recommended Actions:</p>
-                                        <p style="margin: 0; color: #6c757d; font-size: 14px;">
-                                            ${this.getRecommendedActions(alert.type, alert.severity)}
-                                        </p>
-                                    </div>
-                                    
-                                    <hr style="border: none; border-top: 1px solid #e9ecef; margin: 20px 0;">
-                                    
-                                    <div style="text-align: center;">
-                                        <a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}/alerts" style="display: inline-block; background: #2E7D32; color: white; text-decoration: none; padding: 10px 20px; border-radius: 5px; font-size: 14px;">View in Dashboard</a>
-                                    </div>
+                                <div class="message-box">
+                                    <p style="margin: 0; color: #555; line-height: 1.5;">${alert.message}</p>
                                 </div>
                                 
-                                <div style="background: #f8f9fa; padding: 15px; text-align: center; border-top: 1px solid #e9ecef;">
-                                    <p style="margin: 0 0 5px 0; color: #6c757d; font-size: 12px;">${this.systemName}</p>
-                                    <p style="margin: 0; color: #adb5bd; font-size: 11px;">This is an automated alert. Please do not reply to this email.</p>
-                                    <p style="margin: 5px 0 0 0; color: #adb5bd; font-size: 11px;">Contact: ${this.systemContact}</p>
+                                <table class="details-table">
+                                    <tr>
+                                        <td>Parameter</td>
+                                        <td>${alert.type.replace('_', ' ').toUpperCase()}</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Current Value</td>
+                                        <td>${alert.value} ${THRESHOLDS[alert.type]?.unit || ''}</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Threshold</td>
+                                        <td>${alert.threshold} ${THRESHOLDS[alert.type]?.unit || ''}</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Time Detected</td>
+                                        <td>${new Date().toLocaleString()}</td>
+                                    </tr>
+                                </table>
+                                
+                                <div class="actions-box">
+                                    <p>Recommended Actions:</p>
+                                    <p>${this.getRecommendedActions(alert.type, alert.severity)}</p>
+                                </div>
+                                
+                                <hr class="divider">
+                                
+                                <div class="button-container">
+                                    <a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}/alerts" class="button">View in Dashboard</a>
                                 </div>
                             </div>
-                        </body>
-                        </html>
-                    `
-                });
+                            
+                            <div class="footer">
+                                <p>${this.systemName}</p>
+                                <p>This is an automated alert. Please do not reply to this email.</p>
+                                <p>Contact: ${this.systemContact}</p>
+                            </div>
+                        </div>
+                    </body>
+                    </html>
+                `
+            });
 
-                await Notification.updateMany(
-                    { alertId: alert._id, userId: user._id },
-                    { isEmailSent: true }
-                );
-            }
-        } catch (error) {
-            console.error('[EBA System] Error sending email notifications:', error);
+            await Notification.updateMany(
+                { alertId: alert._id, userId: user._id },
+                { isEmailSent: true }
+            );
         }
+    } catch (error) {
+        console.error('[EBA System] Error sending email notifications:', error);
     }
+}
 
     getRecommendedActions(type, severity) {
         const actions = {
