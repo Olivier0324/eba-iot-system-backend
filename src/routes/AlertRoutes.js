@@ -7,6 +7,58 @@ import { Notification } from '../models/Notification.js';
 
 const router = express.Router();
 
+/**
+ * @swagger
+ * /alerts/alerts:
+ *   get:
+ *     summary: Get all alerts
+ *     description: Returns paginated list of alerts with optional filters
+ *     tags: [Alerts]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 20
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [active, acknowledged, resolved]
+ *       - in: query
+ *         name: severity
+ *         schema:
+ *           type: string
+ *           enum: [info, warning, critical, emergency]
+ *       - in: query
+ *         name: type
+ *         schema:
+ *           type: string
+ *           enum: [temperature, humidity, co2, soil_moisture, water_level]
+ *     responses:
+ *       200:
+ *         description: Alerts retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Alert'
+ *                 pagination:
+ *                   type: object
+ */
 // Get all alerts (with pagination and filters)
 router.get('/alerts', protect, async (req, res) => {
     try {
@@ -53,6 +105,32 @@ router.get('/alerts', protect, async (req, res) => {
     }
 });
 
+/**
+ * @swagger
+ * /alerts/alerts/active:
+ *   get:
+ *     summary: Get active alerts
+ *     description: Returns all currently active alerts
+ *     tags: [Alerts]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Active alerts retrieved
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 count:
+ *                   type: integer
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Alert'
+ */
 // Get active alerts
 router.get('/alerts/active', protect, async (req, res) => {
     try {
@@ -69,7 +147,37 @@ router.get('/alerts/active', protect, async (req, res) => {
         res.status(500).json({ success: false, error: error.message });
     }
 });
-
+/**
+ * @swagger
+ * /alerts/alerts/{id}:
+ *   get:
+ *     summary: Get alert by ID
+ *     description: Returns a specific alert by its ID
+ *     tags: [Alerts]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Alert ID
+ *     responses:
+ *       200:
+ *         description: Alert found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   $ref: '#/components/schemas/Alert'
+ *       404:
+ *         description: Alert not found
+ */
 // Get alert by ID
 router.get('/alerts/:id', protect, async (req, res) => {
     try {
@@ -100,7 +208,54 @@ router.put('/alerts/:id/resolve', protect, authorize('admin', 'manager'), async 
         res.status(500).json({ success: false, error: error.message });
     }
 });
+/**
+ * @swagger
+ * /alerts/alerts/{id}/resolve:
+ *   put:
+ *     summary: Resolve alert
+ *     description: Marks an alert as resolved
+ *     tags: [Alerts]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Alert ID
+ *     responses:
+ *       200:
+ *         description: Alert resolved successfully
+ *       404:
+ *         description: Alert not found
+ */
+router.put('/alerts/:id/resolve', protect, authorize('admin', 'manager'), async (req, res) => {
+    // ... your existing code
+});
 
+/**
+ * @swagger
+ * /alerts/alerts/{id}/acknowledge:
+ *   put:
+ *     summary: Acknowledge alert
+ *     description: Marks an alert as acknowledged
+ *     tags: [Alerts]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Alert ID
+ *     responses:
+ *       200:
+ *         description: Alert acknowledged successfully
+ *       404:
+ *         description: Alert not found
+ */
 // Acknowledge alert
 router.put('/alerts/:id/acknowledge', protect, async (req, res) => {
     try {
@@ -115,7 +270,48 @@ router.put('/alerts/:id/acknowledge', protect, async (req, res) => {
         res.status(500).json({ success: false, error: error.message });
     }
 });
-
+/**
+ * @swagger
+ * /alerts/notifications:
+ *   get:
+ *     summary: Get user notifications
+ *     description: Returns notifications for the authenticated user
+ *     tags: [Alerts]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 20
+ *       - in: query
+ *         name: isRead
+ *         schema:
+ *           type: boolean
+ *         description: Filter by read status
+ *     responses:
+ *       200:
+ *         description: Notifications retrieved
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Notification'
+ *                 unreadCount:
+ *                   type: integer
+ */
 // Get user notifications
 router.get('/notifications', protect, async (req, res) => {
     try {
@@ -151,7 +347,28 @@ router.get('/notifications', protect, async (req, res) => {
         res.status(500).json({ success: false, error: error.message });
     }
 });
-
+/**
+ * @swagger
+ * /alerts/notifications/{id}/read:
+ *   put:
+ *     summary: Mark notification as read
+ *     description: Marks a specific notification as read
+ *     tags: [Alerts]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Notification ID
+ *     responses:
+ *       200:
+ *         description: Notification marked as read
+ *       404:
+ *         description: Notification not found
+ */
 // Mark notification as read
 router.put('/notifications/:id/read', protect, async (req, res) => {
     try {
@@ -171,6 +388,19 @@ router.put('/notifications/:id/read', protect, async (req, res) => {
     }
 });
 
+/**
+ * @swagger
+ * /alerts/notifications/read-all:
+ *   put:
+ *     summary: Mark all notifications as read
+ *     description: Marks all notifications for the user as read
+ *     tags: [Alerts]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: All notifications marked as read
+ */
 // Mark all notifications as read
 router.put('/notifications/read-all', protect, async (req, res) => {
     try {
@@ -184,7 +414,28 @@ router.put('/notifications/read-all', protect, async (req, res) => {
         res.status(500).json({ success: false, error: error.message });
     }
 });
-
+/**
+ * @swagger
+ * /alerts/notifications/{id}:
+ *   delete:
+ *     summary: Delete notification
+ *     description: Deletes a specific notification
+ *     tags: [Alerts]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Notification ID
+ *     responses:
+ *       200:
+ *         description: Notification deleted
+ *       404:
+ *         description: Notification not found
+ */
 // Delete notification
 router.delete('/notifications/:id', protect, async (req, res) => {
     try {
@@ -202,7 +453,44 @@ router.delete('/notifications/:id', protect, async (req, res) => {
         res.status(500).json({ success: false, error: error.message });
     }
 });
-
+/**
+ * @swagger
+ * /alerts/statistics:
+ *   get:
+ *     summary: Get alert statistics
+ *     description: Returns statistical summaries of alerts
+ *     tags: [Alerts]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: days
+ *         schema:
+ *           type: integer
+ *           default: 7
+ *         description: Number of days to analyze
+ *     responses:
+ *       200:
+ *         description: Statistics retrieved
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     totalAlerts:
+ *                       type: integer
+ *                     activeAlerts:
+ *                       type: integer
+ *                     bySeverity:
+ *                       type: array
+ *                     byDay:
+ *                       type: array
+ */
 // Get alert statistics
 router.get('/statistics', protect, authorize('admin', 'manager'), async (req, res) => {
     try {

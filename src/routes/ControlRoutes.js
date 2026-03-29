@@ -4,7 +4,42 @@ import { protect, authorize } from '../middlewares/AuthMiddleware.js'
 import ControlService from '../services/ControlService.js';
 import { SensorData } from '../models/SensorData.js';
 const router = express.Router();
-
+/**
+ * @swagger
+ * /control/interval:
+ *   post:
+ *     summary: Set sensor reading interval
+ *     description: Changes the frequency of sensor data collection
+ *     tags: [Device Control]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/SetIntervalRequest'
+ *     responses:
+ *       200:
+ *         description: Interval set successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: Sensor interval set to 60 seconds
+ *       400:
+ *         description: Invalid interval
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ */
 // Set sensor reading interval
 router.post('/interval', protect, authorize('admin', 'manager'), async (req, res) => {
     try {
@@ -51,7 +86,29 @@ router.post('/interval', protect, authorize('admin', 'manager'), async (req, res
         });
     }
 });
-
+/**
+ * @swagger
+ * /control/status:
+ *   get:
+ *     summary: Get device status
+ *     description: Returns the current status of the IoT device including last reading and connection status
+ *     tags: [Device Control]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Device status retrieved
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   $ref: '#/components/schemas/DeviceStatus'
+ */
 // Get current sensor interval and device status
 router.get('/status', protect, async (req, res) => {
     try {
@@ -121,6 +178,41 @@ router.get('/status', protect, async (req, res) => {
         });
     }
 });
+/**
+ * @swagger
+ * /control/presets:
+ *   get:
+ *     summary: Get interval presets
+ *     description: Returns available interval presets for sensor readings
+ *     tags: [Device Control]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Presets retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       name:
+ *                         type: string
+ *                         example: Standard
+ *                       seconds:
+ *                         type: integer
+ *                         example: 60
+ *                       description:
+ *                         type: string
+ *                         example: 1 minute (default)
+ */
 router.get('/presets', protect, async (req, res) => {
     const presets = [
         { name: 'Real-time', seconds: 5, description: '5 seconds (for testing)' },
