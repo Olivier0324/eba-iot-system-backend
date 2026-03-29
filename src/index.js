@@ -12,6 +12,8 @@ import reportRoutes from "./routes/ReportRoutes.js";
 import authRoutes from "./routes/AuthRoutes.js";
 import alertRoutes from './routes/AlertRoutes.js';
 import controlRoutes from './routes/ControlRoutes.js';
+import swaggerRoutes from './routes/swaggerRoutes.js';
+
 import notificationRoutes from './routes/NotificationRoutes.js';
 import { connectDB } from './config/database.js';
 import AlertService from './services/AlertService.js';
@@ -28,6 +30,7 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static('public'));
 app.use('/reports', express.static(path.join(process.cwd(), 'uploads', 'reports')));
+app.use('/api-docs', swaggerRoutes); // Swagger UI route
 
 connectDB();
 
@@ -52,7 +55,6 @@ const mqttClient = mqtt.connect({
 let latestSensorData = null;
 let latestDeviceStatus = null;
 const pendingRequests = new Map();
-
 // ==================== MQTT Subscriptions ====================
 mqttClient.on('connect', () => {
     console.log('✅ MQTT Connected');
