@@ -13,42 +13,7 @@ const options = {
         info: {
             title: 'EBA System API - IoT-Based Environmental Monitoring',
             version: '1.0.0',
-            description: `
-        EBA System API Documentation
-        
-        The EBA System is an IoT-based environmental monitoring platform designed for Ecosystem-Based Adaptation interventions in Rwanda.
-        
-        ### Key Features:
-        - **Real-time Sensor Data Collection**: Soil moisture, water level, CO₂, temperature, humidity
-        - **Automated Alerts & Notifications**: Threshold-based alerts with email notifications
-        - **PDF Report Generation**: Generate environmental monitoring reports
-        - **Device Control**: Remotely configure sensor reading intervals
-        - **User Authentication**: OTP-based secure login
-        - **Data Analytics**: Statistical analysis and visualizations
-        
-        ### Authentication
-        Most endpoints require a JWT token. Include it in the Authorization header:
-        \`Authorization: Bearer <your_token>\`
-        
-        ### Response Format
-        All responses follow the format:
-        \`\`\`json
-        {
-          "success": true,
-          "data": {...},
-          "message": "Optional message"
-        }
-        \`\`\`
-      `,
-            contact: {
-                name: 'EBA System Team',
-                email: 'eba-system@ur.ac.rw',
-                url: 'https://eba-system.com'
-            },
-            license: {
-                name: 'MIT',
-                url: 'https://opensource.org/licenses/MIT'
-            },
+            description: "EBA OBSERVA is a system that monitors the environment using IoT devices and provides real-time data to users. This API provides endpoints for user authentication, data retrieval, and device management.",
         },
         servers: [
             {
