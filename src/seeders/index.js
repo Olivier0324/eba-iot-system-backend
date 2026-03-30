@@ -14,11 +14,11 @@ const seedUsers = async () => {
 
         const usersData = [
             {
-                username: "Dr_sammy",
-                email: "ndikumanasamuel140@gmail.com",
+                username: "Divine",
+                email: "iradivine1@gmail.com",
                 password: await bcrypt.hash("password123", 10),
                 role: "user",
-                isActive: false,  // Add this field
+                isActive: true,  // Add this field
             },
             {
                 username: "olivis_techie",
@@ -33,6 +33,13 @@ const seedUsers = async () => {
                 password: await bcrypt.hash("password123", 10),
                 role: "manager",
                 isActive: false,  // Add this field
+            },
+            {
+                username: "NGABO",
+                email: "ngaboemm14@gmail.com",
+                password: await bcrypt.hash("password123", 10),
+                role: "manager",
+                isActive: true,  // Add this field
             }
         ];
 
@@ -71,20 +78,6 @@ const seedUsers = async () => {
 
         await UserNotificationPrefs.insertMany(preferences);
         console.log(`✅ Created ${preferences.length} notification preferences`);
-
-        // Display user credentials
-        console.log("\n📋 User Credentials:");
-        console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-        users.forEach(user => {
-            const password = user.username === "Dr_sammy" ? "password123" :
-                user.username === "olivis_techie" ? "password123" : "password123";
-            console.log(`   👤 ${user.username} (${user.role})`);
-            console.log(`   📧 ${user.email}`);
-            console.log(`   🔑 Password: ${password}`);
-            console.log(`   ✅ Active: ${user.isActive}`);
-            console.log("   ─────────────────────────────");
-        });
-        console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
 
         console.log("\n🎉 Seeding completed successfully!");
         process.exit(0);

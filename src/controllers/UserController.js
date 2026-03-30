@@ -26,13 +26,7 @@ export const login = async (req, res) => {
         }
 
         // Check if account is active
-        if (!user.isActive) {
-            return res.status(401).json({
-                success: false,
-                message: "Account is disabled. Please contact administrator."
-            });
-        }
-
+      
         // Verify password
         const isPasswordValid = await bcrypt.compare(password, user.password);
         if (!isPasswordValid) {
@@ -94,13 +88,7 @@ export const verifyOTP = async (req, res) => {
             });
         }
 
-        // Check if account is active
-        if (!user.isActive) {
-            return res.status(401).json({
-                success: false,
-                message: "Account is disabled"
-            });
-        }
+        
 
         // Verify OTP
         if (user.otp !== otp) {
