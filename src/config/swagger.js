@@ -21,7 +21,7 @@ const options = {
                 description: 'Development Server'
             },
             {
-                url: 'https://api.eba-system.com/api/v1',
+                url: 'http://eba-observa.onrender.com/api/v1',
                 description: 'Production Server'
             }
         ],
