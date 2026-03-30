@@ -25,8 +25,20 @@ const server = http.createServer(app);
 
 // Initialize Socket.IO
 const io = initSocket(server);
-
-app.use(cors());
+const corsOptions = {
+    origin: [
+        "http://localhost:3000", // local frontend
+        "http://localhost:5173",
+        "http://localhost:5174",
+        "https://localhost:5175",
+        "http://eba-observa.onrender.com", // replace later
+        "https://your-frontend-domain.com" // replace later
+    ],
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+    credentials: true
+};
+app.use(cors(corsOptions));
 app.use(express.json());
 app.use(express.static('public'));
 app.use('/reports', express.static(path.join(process.cwd(), 'uploads', 'reports')));
