@@ -31,7 +31,7 @@ const corsOptions = {
         "http://localhost:5173",
         "http://localhost:5174",
         "https://localhost:5175",
-        "http://eba-observa.onrender.com", // replace later
+        "https://eba-observa.onrender.com", // replace later
         "https://your-frontend-domain.com" // replace later
     ],
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
