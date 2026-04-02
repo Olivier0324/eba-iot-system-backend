@@ -1,27 +1,17 @@
 // routes/swaggerRoutes.js
 import express from 'express';
-import { swaggerUi, specs } from '../config/swagger.js';
+import { swaggerUi, setupSwaggerUi, specs, swaggerUiWithCors } from '../config/swagger.js';
 
 const router = express.Router();
 
-// Swagger UI
-router.use('/', swaggerUi.serve);
-router.get('/', swaggerUi.setup(specs, {
-    explorer: true,
-    customCss: '.swagger-ui .topbar { display: none }',
-    customSiteTitle: 'EBA System API Documentation',
-    customfavIcon: '/favicon.ico',
-    swaggerOptions: {
-        persistAuthorization: true,
-        displayRequestDuration: true,
-        filter: true,
-        tryItOutEnabled: true,
-    }
-}));
+router.use(swaggerUiWithCors);
 
-// Swagger JSON endpoint
+router.use('/', swaggerUi.serve);
+router.get('/', setupSwaggerUi);
+
 router.get('/json', (req, res) => {
     res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Access-Control-Allow-Origin', '*');
     res.send(specs);
 });
 

@@ -9,7 +9,7 @@ const router = express.Router();
 
 /**
  * @swagger
- * /alerts/alerts:
+ * /alerts:
  *   get:
  *     summary: Get all alerts
  *     description: Returns paginated list of alerts with optional filters
@@ -60,7 +60,7 @@ const router = express.Router();
  *                   type: object
  */
 // Get all alerts (with pagination and filters)
-router.get('/alerts', protect, async (req, res) => {
+router.get('/', protect, async (req, res) => {
     try {
         const {
             page = 1,
@@ -107,7 +107,7 @@ router.get('/alerts', protect, async (req, res) => {
 
 /**
  * @swagger
- * /alerts/alerts/active:
+ * /alerts/active:
  *   get:
  *     summary: Get active alerts
  *     description: Returns all currently active alerts
@@ -132,7 +132,7 @@ router.get('/alerts', protect, async (req, res) => {
  *                     $ref: '#/components/schemas/Alert'
  */
 // Get active alerts
-router.get('/alerts/active', protect, async (req, res) => {
+router.get('/active', protect, async (req, res) => {
     try {
         const alerts = await Alert.find({ status: 'active' })
             .populate('sensorData')
@@ -149,7 +149,7 @@ router.get('/alerts/active', protect, async (req, res) => {
 });
 /**
  * @swagger
- * /alerts/alerts/{id}:
+ * /alerts/{id}:
  *   get:
  *     summary: Get alert by ID
  *     description: Returns a specific alert by its ID
@@ -179,7 +179,7 @@ router.get('/alerts/active', protect, async (req, res) => {
  *         description: Alert not found
  */
 // Get alert by ID
-router.get('/alerts/:id', protect, async (req, res) => {
+router.get('/:id', protect, async (req, res) => {
     try {
         const alert = await Alert.findById(req.params.id)
             .populate('sensorData');
@@ -210,7 +210,7 @@ router.put('/alerts/:id/resolve', protect, authorize('admin', 'manager'), async 
 });
 /**
  * @swagger
- * /alerts/alerts/{id}/resolve:
+ * /alerts/{id}/resolve:
  *   put:
  *     summary: Resolve alert
  *     description: Marks an alert as resolved
@@ -236,7 +236,7 @@ router.put('/alerts/:id/resolve', protect, authorize('admin', 'manager'), async 
 
 /**
  * @swagger
- * /alerts/alerts/{id}/acknowledge:
+ * /alerts/{id}/acknowledge:
  *   put:
  *     summary: Acknowledge alert
  *     description: Marks an alert as acknowledged
