@@ -29,7 +29,7 @@ const generateAnalysisText = (metrics, data, selectedMetric) => {
             let text = `This section provides statistical analysis of ${filteredMetric.name}. `;
             text += `Values ranged from ${stats.min} to ${stats.max} ${filteredMetric.unit}, `;
             text += `with an average of ${stats.avg} ${filteredMetric.unit} and a standard deviation of ${stats.stdDev} ${filteredMetric.unit}. `;
-            
+
             if (selectedMetric === "co2" || selectedMetric === "co2_ppm") {
                 const avgCO2 = parseFloat(stats.avg);
                 if (avgCO2 > 1000) text += "CO2 levels exceed recommended thresholds, indicating poor indoor air quality that requires immediate ventilation.";
@@ -39,7 +39,7 @@ const generateAnalysisText = (metrics, data, selectedMetric) => {
             return text;
         }
     }
-    
+
     let text = "This section provides statistical analysis of all monitored environmental parameters. ";
     for (const metric of metrics) {
         if (!metric.data || metric.data.length === 0) continue;
@@ -52,7 +52,7 @@ const generateAnalysisText = (metrics, data, selectedMetric) => {
 
 const generateRecommendations = (metrics, data, selectedMetric) => {
     const recommendations = [];
-    
+
     if (!data || data.length === 0) {
         return "No data available for recommendations.";
     }
@@ -66,19 +66,19 @@ const generateRecommendations = (metrics, data, selectedMetric) => {
         else if (avgTemp < 18) recommendations.push("• Low average temperature detected. Consider heating or insulation improvements.");
         else recommendations.push("• Temperature levels are within optimal range. Continue regular monitoring.");
     }
-    
+
     if (!selectedMetric || selectedMetric === "all" || selectedMetric === "humidity") {
         if (avgHumidity > 75) recommendations.push("• Elevated humidity levels may lead to mold growth. Ensure proper ventilation.");
         else if (avgHumidity < 30) recommendations.push("• Low humidity may cause discomfort. Consider humidification.");
         else recommendations.push("• Humidity levels are within optimal range. Continue regular monitoring.");
     }
-    
+
     if (!selectedMetric || selectedMetric === "all" || selectedMetric === "co2" || selectedMetric === "co2_ppm") {
         if (avgCO2 > 1000) recommendations.push("• CRITICAL: CO2 levels exceed safety thresholds. Implement immediate ventilation protocols.");
         else if (avgCO2 > 800) recommendations.push("• Elevated CO2 levels detected. Schedule regular ventilation.");
         else recommendations.push("• CO2 levels are within acceptable ranges. Continue regular monitoring.");
     }
-    
+
     if (recommendations.length === 0)
         recommendations.push("• All monitored parameters are within acceptable ranges. Continue regular monitoring.");
 
@@ -133,24 +133,37 @@ export const generatePDF = async (data, options) => {
 
     let pageNumber = 1;
     let currentY = PAGE_TOP;
-    let hasContentOnCurrentPage = false; // Track if current page has content
+    let hasContentOnCurrentPage = false;
 
     // ── Footer ─────────────────────────────────────────────────
     const addFooter = () => {
-        // Only add footer if there's content on this page
         if (!hasContentOnCurrentPage) return;
-        
+
         doc.save();
+
+        // ✅ FIX: Suspend PDFKit's bottom-margin auto-page-break while
+        //    writing in the footer zone (which sits below the margin boundary).
+        //    Without this, doc.text() at page.height - 35 (~807 pts) exceeds
+        //    PDFKit's internal limit of page.height - margins.bottom (~791 pts)
+        //    and silently triggers a new page, causing the footer to appear alone.
+        const savedBottomMargin = doc.page.margins.bottom;
+        doc.page.margins.bottom = 0;
+
         doc.strokeColor(C.border).lineWidth(0.5)
             .moveTo(50, doc.page.height - 45)
             .lineTo(doc.page.width - 50, doc.page.height - 45)
             .stroke();
+
         doc.fillColor(C.textLight).fontSize(T.small.size).font(T.small.font)
             .text(
                 `ECOBASED SYSTEM - Confidential | Generated: ${new Date().toLocaleDateString()} | Page ${pageNumber}`,
                 50, doc.page.height - 35,
                 { align: "center", width: doc.page.width - 100 }
             );
+
+        // ✅ Restore margin so normal content page-breaking still works
+        doc.page.margins.bottom = savedBottomMargin;
+
         doc.restore();
     };
 
@@ -158,11 +171,11 @@ export const generatePDF = async (data, options) => {
 
     /** Always open a new page. */
     const newPage = () => {
-        addFooter(); // Add footer to current page before moving to next
+        addFooter();
         doc.addPage();
         pageNumber++;
         currentY = PAGE_TOP;
-        hasContentOnCurrentPage = false; // Reset content flag for new page
+        hasContentOnCurrentPage = false;
     };
 
     /**
@@ -174,19 +187,11 @@ export const generatePDF = async (data, options) => {
 
     /**
      * Draw a section heading, opening a new page only when BOTH:
-     *   (a) page has real content on it already — i.e. we are NOT
-     *       already sitting near the top of a freshly-opened page, AND
+     *   (a) page has real content on it already, AND
      *   (b) heading + `minContent` px would overflow the current page.
-     *
-     * This dual guard is what eliminates blank pages:
-     *   • ensureSpace() called just before us may have already flipped
-     *     to a new page, leaving currentY at PAGE_TOP. Without guard (a)
-     *     we would flip AGAIN, leaving that new page entirely blank.
-     *   • Guard (b) ensures we still break when a section genuinely
-     *     cannot fit on the remaining space.
      */
-    const HEADING_H = 28;   // h2 font + line gap
-    const FRESH_PAGE_THRESHOLD = 80;  // currentY <= PAGE_TOP + this  →  page is "fresh"
+    const HEADING_H = 28;
+    const FRESH_PAGE_THRESHOLD = 80;
 
     const sectionHeading = (label, minContent = 100) => {
         const isOnFreshPage = currentY <= PAGE_TOP + FRESH_PAGE_THRESHOLD;
@@ -197,11 +202,11 @@ export const generatePDF = async (data, options) => {
         doc.fillColor(C.primary).fontSize(T.h2.size).font(T.h2.font)
             .text(label, 50, currentY);
         currentY += HEADING_H;
-        hasContentOnCurrentPage = true; // Mark that this page now has content
+        hasContentOnCurrentPage = true;
     };
 
     /**
-     * Improved text rendering with proper page breaks
+     * Render text with automatic page breaks.
      */
     const renderText = (text, options = {}) => {
         const {
@@ -210,29 +215,25 @@ export const generatePDF = async (data, options) => {
             fontSize = T.body.size,
             font = T.body.font,
             color = C.text,
-            lineHeight = 1.4,
             marginBottom = 10
         } = options;
 
         doc.fontSize(fontSize).font(font).fillColor(color);
-        
-        // Calculate how much space the text will take
+
         const textHeight = doc.heightOfString(text, { width, align });
-        
-        // Check if we need a page break
+
         ensureSpace(textHeight + marginBottom);
-        
-        // Render the text
+
         doc.text(text, 50, currentY, { width, align });
         currentY += textHeight + marginBottom;
-        hasContentOnCurrentPage = true; // Mark that this page now has content
+        hasContentOnCurrentPage = true;
     };
 
     // ─────────────────────────────────────────────────────────
     // 0. COVER HEADER  (first page)
     // ─────────────────────────────────────────────────────────
     doc.rect(0, 0, doc.page.width, 85).fill(C.background);
-    hasContentOnCurrentPage = true; // Mark that this page now has content
+    hasContentOnCurrentPage = true;
 
     const logoPath = path.join(process.cwd(), "assets", "logo.png");
     if (fs.existsSync(logoPath)) {
@@ -278,7 +279,6 @@ export const generatePDF = async (data, options) => {
     if (avgCO2 > 1000 && (!metric || metric === "all" || metric === "co2" || metric === "co2_ppm"))
         summaryText += `CO2 levels exceeded recommended thresholds, indicating poor air quality that requires ventilation.`;
 
-    // Use the new renderText function
     renderText(summaryText, { align: "justify" });
 
     // Data overview card
@@ -296,7 +296,7 @@ export const generatePDF = async (data, options) => {
         .text(`Date Range: ${dateRange}`, 220, currentY + 35)
         .text(parametersText, 400, currentY + 35, { width: 140 });
     currentY += 75;
-    hasContentOnCurrentPage = true; // Mark that this page now has content
+    hasContentOnCurrentPage = true;
 
     // ─────────────────────────────────────────────────────────
     // 2. DETAILED SENSOR DATA TABLE
@@ -325,8 +325,6 @@ export const generatePDF = async (data, options) => {
     const HEAD_H = 26;
     const COL_PAD = 4;
 
-    // Draw header at currentY — caller is responsible for ensureSpace.
-    // No ensureSpace/newPage inside here to avoid double-breaks.
     const drawTableHeader = () => {
         doc.rect(50, currentY, CONTENT_W, HEAD_H).fill(C.primary);
         visCols.forEach((col) => {
@@ -335,17 +333,16 @@ export const generatePDF = async (data, options) => {
                     { width: col.w - COL_PAD * 2, ellipsis: true });
         });
         currentY += HEAD_H;
-        hasContentOnCurrentPage = true; // Mark that this page now has content
+        hasContentOnCurrentPage = true;
     };
 
     ensureSpace(HEAD_H + ROW_H);
     drawTableHeader();
 
     for (let i = 0; i < data.length; i++) {
-        // If this row won't fit, flip page and redraw header
         if (currentY + ROW_H > PAGE_BOTTOM) {
             newPage();
-            drawTableHeader();   // currentY is PAGE_TOP here — always fits
+            drawTableHeader();
         }
 
         if (i % 2 === 0) doc.rect(50, currentY, CONTENT_W, ROW_H).fill(C.cardBg);
@@ -377,7 +374,7 @@ export const generatePDF = async (data, options) => {
         });
 
         currentY += ROW_H;
-        hasContentOnCurrentPage = true; // Mark that this page now has content
+        hasContentOnCurrentPage = true;
     }
 
     currentY += 15;
@@ -413,14 +410,14 @@ export const generatePDF = async (data, options) => {
             .text(`Avg: ${stats.avg}${m.unit}`, 295, currentY + 38)
             .text(`Std Dev: ${stats.stdDev}${m.unit}`, 405, currentY + 38);
         currentY += CARD_H + 12;
-        hasContentOnCurrentPage = true; // Mark that this page now has content
+        hasContentOnCurrentPage = true;
     }
 
     // ─────────────────────────────────────────────────────────
     // 4. DATA VISUALIZATIONS
     // ─────────────────────────────────────────────────────────
     const CHART_H = 260;
-    const CHART_BOX_H = CHART_H + 30;   // chart box + caption
+    const CHART_BOX_H = CHART_H + 30;
 
     sectionHeading("4. Data Visualizations", CHART_BOX_H);
 
@@ -452,7 +449,7 @@ export const generatePDF = async (data, options) => {
                 .text("Figure 1: Time series analysis", 50, currentY,
                     { align: "center", width: CONTENT_W });
             currentY += 25;
-            hasContentOnCurrentPage = true; // Mark that this page now has content
+            hasContentOnCurrentPage = true;
         }
     }
 
@@ -476,7 +473,7 @@ export const generatePDF = async (data, options) => {
                     .text("Figure 2: CO2 Level Distribution", 50, currentY,
                         { align: "center", width: CONTENT_W });
                 currentY += 25;
-                hasContentOnCurrentPage = true; // Mark that this page now has content
+                hasContentOnCurrentPage = true;
             }
         }
     }
@@ -489,7 +486,7 @@ export const generatePDF = async (data, options) => {
     const recommendations = generateRecommendations(metrics, data, metric);
     renderText(recommendations, { align: "justify" });
 
-    // Only add footer to the last page if it has content
+    // Add footer to the final page
     if (hasContentOnCurrentPage) {
         addFooter();
     }
