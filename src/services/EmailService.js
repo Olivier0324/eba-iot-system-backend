@@ -16,7 +16,7 @@ const transporter = nodemailer.createTransport({
 export const sendEmail = async ({ to, subject, html, text }) => {
     try {
         const mailOptions = {
-            from: process.env.EMAIL_FROM || 'EBA IoT System <noreply@eba-system.com>',
+            from: process.env.EMAIL_FROM,
             to,
             subject,
             html: html || text,

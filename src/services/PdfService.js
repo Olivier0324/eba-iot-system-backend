@@ -4,9 +4,7 @@ import fs from "fs";
 import path from "path";
 import { generateFullChart, generatePieChart } from "./ChartService.js";
 
-// ─────────────────────────────────────────────
 // HELPERS
-// ─────────────────────────────────────────────
 
 /**
  * Strip records that have no sensor readings at all
@@ -124,17 +122,12 @@ const generateRecommendations = (metrics, data, selectedMetric) => {
     return "Based on collected data, the following actions are recommended:\n\n" + recs.join("\n");
 };
 
-// ─────────────────────────────────────────────
-// MAIN EXPORT
-// ─────────────────────────────────────────────
 
 export const generatePDF = async (rawData, options) => {
     if (!rawData || !Array.isArray(rawData) || rawData.length === 0)
         throw new Error("Invalid or empty data provided for PDF generation");
 
     const { metric, type } = options || {};
-
-    // ── Clean: remove heartbeat-only records ──────────────────
     const data = cleanData(rawData);
     if (data.length === 0)
         throw new Error("No records with sensor readings found after filtering");
@@ -149,25 +142,25 @@ export const generatePDF = async (rawData, options) => {
     const writeStream = fs.createWriteStream(filePath);
     doc.pipe(writeStream);
 
-    // ── Design tokens aligned to your Tailwind palette ────────
+
     const C = {
         // eco greens
-        primary: "#29B84A",   // eco-500
-        primaryDark: "#1E7D33",   // eco-700
-        primaryDeep: "#145222",   // eco-900
+        primary: "#29B84A",   
+        primaryDark: "#1E7D33",   
+        primaryDeep: "#145222",  
 
         // ocean blues
-        ocean: "#4931C9",   // ocean-500
-        oceanDark: "#312188",   // ocean-700
+        ocean: "#4931C9",   
+        oceanDark: "#312188",   
 
         // teal
-        teal: "#17A3B8",   // teal-500
+        teal: "#17A3B8",  
 
         // alert / semantic
-        warning: "#DC3545",   // red – critical
-        alert: "#C46417",   // alert-500 – orange
-        warnGreen: "#6DB817",   // warn-500
-        info: "#0D6EFD",   // blue
+        warning: "#DC3545",  
+        alert: "#C46417",   
+        warnGreen: "#6DB817", 
+        info: "#0D6EFD", 
 
         // neutrals
         text: "#2D3748",
@@ -177,25 +170,25 @@ export const generatePDF = async (rawData, options) => {
         borderDark: "#CBD5E0",
         background: "#F7FAFC",
         cardBg: "#FFFFFF",
-        stripeBg: "#F0FFF4",   // eco-50-ish
+        stripeBg: "#F0FFF4",  
         white: "#FFFFFF",
 
         // chart colours
-        chart1: "#29B84A",   // eco-500
-        chart2: "#4931C9",   // ocean-500
-        chart3: "#17A3B8",   // teal-500
-        chart4: "#C46417",   // alert-500
-        chart5: "#6DB817",   // warn-500
+        chart1: "#29B84A",   
+        chart2: "#4931C9", 
+        chart3: "#17A3B8",   
+        chart4: "#C46417",   
+        chart5: "#6DB817", 
     };
 
     const T = {
-        h1: { size: 22, font: "Helvetica-Bold" },
-        h2: { size: 15, font: "Helvetica-Bold" },
+        h1: { size: 18, font: "Helvetica-Bold" },
+        h2: { size: 14, font: "Helvetica-Bold" },
         h3: { size: 11, font: "Helvetica-Bold" },
-        body: { size: 10, font: "Helvetica" },
-        small: { size: 8, font: "Helvetica" },
-        caption: { size: 9, font: "Helvetica-Oblique" },
-        mono: { size: 9, font: "Courier" },
+        body: { size: 8, font: "Helvetica" },
+        small: { size: 7, font: "Helvetica" },
+        caption: { size: 6, font: "Helvetica-Oblique" },
+        mono: { size: 6, font: "Courier" },
     };
 
     // ── Page geometry ──────────────────────────────────────────
@@ -215,8 +208,6 @@ export const generatePDF = async (rawData, options) => {
         if (!hasContentOnCurrentPage) return;
         doc.save();
 
-        // Temporarily disable auto-page-break so footer text doesn't
-        // push onto a new blank page.
         const savedBottom = doc.page.margins.bottom;
         doc.page.margins.bottom = 0;
 
@@ -245,8 +236,6 @@ export const generatePDF = async (rawData, options) => {
         doc.page.margins.bottom = savedBottom;
         doc.restore();
     };
-
-    // ── Page-break helpers ─────────────────────────────────────
     const newPage = () => {
         addFooter();
         doc.addPage();
@@ -297,8 +286,6 @@ export const generatePDF = async (rawData, options) => {
         currentY += h + marginBottom;
         hasContentOnCurrentPage = true;
     };
-
-    // ── Thin horizontal rule ───────────────────────────────────
     const rule = (topMargin = 8, bottomMargin = 8) => {
         currentY += topMargin;
         doc.strokeColor(C.border).lineWidth(0.5)
@@ -307,15 +294,9 @@ export const generatePDF = async (rawData, options) => {
             .stroke();
         currentY += bottomMargin;
     };
-
-    // ─────────────────────────────────────────────────────────
-    // 0. COVER HEADER
-    // ─────────────────────────────────────────────────────────
-    // Green gradient band
     doc.rect(0, 0, PAGE_W, 90).fill(C.primaryDeep);
     doc.rect(0, 88, PAGE_W, 3).fill(C.primary);
 
-    // Logo placeholder / image
     const logoPath = path.join(process.cwd(), "assets", "logo.png");
     if (fs.existsSync(logoPath)) {
         try { doc.image(logoPath, MARGIN, 18, { height: 50 }); }
@@ -579,9 +560,6 @@ export const generatePDF = async (rawData, options) => {
     }
     currentY += 14;
 
-    // ─────────────────────────────────────────────────────────
-    // 3. STATISTICAL ANALYSIS
-    // ─────────────────────────────────────────────────────────
     sectionHeading("3. Statistical Analysis", "", 100);
 
     const analysisText = generateAnalysisText(metricDefs, metric);
@@ -630,16 +608,10 @@ export const generatePDF = async (rawData, options) => {
         currentY += CARD_H + 10;
         hasContentOnCurrentPage = true;
     }
-
-    // ─────────────────────────────────────────────────────────
-    // 4. DATA VISUALIZATIONS
-    // ─────────────────────────────────────────────────────────
     const CHART_H = 260;
     const CHART_BOX = CHART_H + 35;
 
     sectionHeading("4. Data Visualizations", "", CHART_BOX);
-
-    // ── Figure 1: Time-series (all metrics with dual axis) ────
     const chartImage = await generateFullChart(data, metric);
     if (chartImage) {
         ensureSpace(CHART_BOX + 10);
@@ -695,7 +667,6 @@ export const generatePDF = async (rawData, options) => {
     const recsText = generateRecommendations(metricDefs, data, metric);
     renderText(recsText, { align: "justify" });
 
-    // ── Data Quality Note ──────────────────────────────────────
     if (rawData.length !== data.length) {
         rule(8, 8);
         ensureSpace(34);
@@ -713,10 +684,6 @@ export const generatePDF = async (rawData, options) => {
         currentY += 34;
         hasContentOnCurrentPage = true;
     }
-
-    // ─────────────────────────────────────────────────────────
-    // END
-    // ─────────────────────────────────────────────────────────
     if (hasContentOnCurrentPage) addFooter();
 
     doc.end();

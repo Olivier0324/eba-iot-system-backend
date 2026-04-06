@@ -10,7 +10,7 @@ const UserSchema = new mongoose.Schema({
     email: {
         type: String,
         required: true,
-        unique: true,
+        unique: true,  // This creates an index automatically
         lowercase: true,
         trim: true
     },
@@ -58,14 +58,10 @@ const UserSchema = new mongoose.Schema({
 }, {
     timestamps: true
 });
-
-// Indexes for better query performance
-UserSchema.index({ email: 1 });
 UserSchema.index({ role: 1 });
 UserSchema.index({ isActive: 1 });
 UserSchema.index({ createdAt: -1 });
-
-// Virtual for full name
+UserSchema.index({ role: 1, isActive: 1, createdAt: -1 });
 UserSchema.virtual('fullName').get(function () {
     return this.username;
 });
