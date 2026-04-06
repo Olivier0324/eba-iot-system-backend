@@ -195,7 +195,7 @@ router.get('/:id', protect, async (req, res) => {
 });
 
 // Resolve alert
-router.put('/alerts/:id/resolve', protect, authorize('admin', 'manager'), async (req, res) => {
+router.put('/:id/resolve', protect, authorize('admin', 'manager'), async (req, res) => {
     try {
         const alert = await AlertService.resolveAlert(req.params.id, req.user.username);
 
@@ -230,7 +230,7 @@ router.put('/alerts/:id/resolve', protect, authorize('admin', 'manager'), async 
  *       404:
  *         description: Alert not found
  */
-router.put('/alerts/:id/resolve', protect, authorize('admin', 'manager'), async (req, res) => {
+router.put('/:id/resolve', protect, authorize('admin', 'manager'), async (req, res) => {
     // ... your existing code
 });
 
@@ -257,7 +257,7 @@ router.put('/alerts/:id/resolve', protect, authorize('admin', 'manager'), async 
  *         description: Alert not found
  */
 // Acknowledge alert
-router.put('/alerts/:id/acknowledge', protect, async (req, res) => {
+router.put('/:id/acknowledge', protect, async (req, res) => {
     try {
         const alert = await AlertService.acknowledgeAlert(req.params.id, req.user._id);
 

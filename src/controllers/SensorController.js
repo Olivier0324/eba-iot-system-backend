@@ -48,3 +48,22 @@ export const getStatsData = async (req, res) => {
     }
     
 }
+
+export const getLatestData = async (req, res) => {
+  try {
+    const latestData = await SensorData.findOne().sort({ createdAt: -1 });
+
+    if (!latestData) {
+      return res.status(404).json({ message: "No sensor data found" });
+    }
+      res.status(200).json({
+          success: true,
+            data: latestData
+    });
+
+  } catch (error) {
+    console.error("Error fetching latest data:", error);
+    res.status(500).json({ message: "Server Error", error: error.message });
+  }
+};
+

@@ -1,5 +1,5 @@
 import express from "express";
-import { getAllData, getStatsData } from "../controllers/SensorController.js";
+import { getAllData, getStatsData, getLatestData} from "../controllers/SensorController.js";
 
 const router = express.Router();
 /**
@@ -60,5 +60,44 @@ router.get("/data", getAllData);
  *                     $ref: '#/components/schemas/SensorStats'
  */
 router.get("/stats", getStatsData);
+/**
+ * @swagger
+ * /sensor/latest:
+ *   get:
+ *     summary: Get latest sensor data
+ *     description: Returns the most recent sensor reading
+ *     tags: [Sensor Data]
+ *     responses:
+ *       200:
+ *         description: Latest sensor data retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     temperature:
+ *                       type: number
+ *                       example: 23.5
+ *                     humidity:
+ *                       type: number
+ *                       example: 45.6
+ *                     co2_ppm:
+ *                       type: integer
+ *                       example: 800
+ *                     soil_moisture_percent:
+ *                       type: integer
+ *                       example: 30
+ *                     water_level_percent:
+ *                       type: integer
+ *                       example: 50
+ */
+
+router.get("/latest", getLatestData);
 
 export default router;
