@@ -270,6 +270,14 @@ class AlertService {
 
     async createAlert(alertData) {
         try {
+            console.log('[EBA System] createAlert start', {
+                type: alertData.type,
+                severity: alertData.severity,
+                value: alertData.value,
+                threshold: alertData.threshold,
+                sensorData: alertData.sensorData?.toString?.() || alertData.sensorData
+            });
+
             // Double-check with a database lock to prevent race conditions
             const existingAlert = await Alert.findOne({
                 type: alertData.type,
@@ -285,27 +293,44 @@ class AlertService {
 
             const alert = new Alert(alertData);
             await alert.save();
-
-            await NotificationService.broadcastNotification({
-                type: 'alert',
-                title: alert.title,
-                message: alert.message,
-                priority: alert.severity === 'emergency' ? 'critical' :
-                    alert.severity === 'critical' ? 'high' : 'medium',
-                data: {
-                    alertId: alert._id,
-                    type: alert.type,
-                    severity: alert.severity,
-                    value: alert.value,
-                    threshold: alert.threshold
-                },
-                alertId: alert._id
+            console.log('[EBA System] alert saved', {
+                alertId: alert._id,
+                type: alert.type,
+                severity: alert.severity
             });
 
+            console.log('[EBA System] broadcasting alert notification', { alertId: alert._id });
+            if (typeof NotificationService.broadcastNotification === 'function') {
+                await NotificationService.broadcastNotification({
+                    type: 'alert',
+                    title: alert.title,
+                    message: alert.message,
+                    priority: alert.severity === 'emergency' ? 'critical' :
+                        alert.severity === 'critical' ? 'high' : 'medium',
+                    data: {
+                        alertId: alert._id,
+                        type: alert.type,
+                        severity: alert.severity,
+                        value: alert.value,
+                        threshold: alert.threshold
+                    },
+                    alertId: alert._id
+                });
+                console.log('[EBA System] broadcast notification complete', { alertId: alert._id });
+            } else {
+                console.warn('[EBA System] NotificationService.broadcastNotification is missing, skipping broadcast');
+            }
+
             // Create notifications in database
+            console.log('[EBA System] creating database notifications', { alertId: alert._id });
             await this.createNotificationsForAlert(alert);
 
             // Send emails for all alerts (critical and emergency get immediate email)
+            console.log('[EBA System] email gate check', {
+                alertId: alert._id,
+                severity: alert.severity,
+                shouldSend: alert.severity === 'critical' || alert.severity === 'emergency'
+            });
             if (alert.severity === 'critical' || alert.severity === 'emergency') {
                 await this.sendEmailNotifications(alert);
             }
@@ -321,6 +346,10 @@ class AlertService {
     async createNotificationsForAlert(alert) {
         try {
             const users = await User.find({ isActive: true });
+            console.log('[EBA System] creating notifications for active users', {
+                alertId: alert._id,
+                userCount: users.length
+            });
 
             const notifications = users.map(user => ({
                 userId: user._id,
@@ -347,7 +376,6 @@ class AlertService {
     }
 
     async sendEmailNotifications(alert) {
-        // Prevent duplicate email sends for the same alert
         const emailKey = `${alert._id}`;
         if (this.sendingEmails.has(emailKey)) {
             console.log(`[EBA System] Already sending emails for alert ${alert._id}, skipping`);
@@ -357,7 +385,13 @@ class AlertService {
         this.sendingEmails.add(emailKey);
 
         try {
-            // Check if emails were already sent for this alert
+            console.log('[EBA System] sendEmailNotifications start', {
+                alertId: alert._id,
+                severity: alert.severity,
+                emailUserConfigured: !!process.env.EMAIL_USER,
+                emailFromConfigured: !!process.env.EMAIL_FROM
+            });
+
             const existingNotifications = await Notification.find({
                 alertId: alert._id,
                 isEmailSent: true
@@ -373,30 +407,61 @@ class AlertService {
                 isActive: true
             });
 
+            console.log('[EBA System] email recipients found', {
+                alertId: alert._id,
+                recipientCount: users.length,
+                recipients: users.map(user => user.email)
+            });
+
             if (users.length === 0) {
                 console.log('[EBA System] No users to send email notifications to');
                 return;
             }
 
             for (const user of users) {
-                await sendEmail({
+                console.log('[EBA System] sending alert email', {
+                    alertId: alert._id,
                     to: user.email,
-                    subject: `[EBA System] ${alert.severity.toUpperCase()}: ${alert.title}`,
-                    html: this.generateEmailHTML(alert, user)
+                    severity: alert.severity
                 });
 
-                // Mark notification as email sent
-                await Notification.updateMany(
-                    { alertId: alert._id, userId: user._id },
-                    { isEmailSent: true }
-                );
+                try {
+                    const result = await sendEmail({
+                        to: user.email,
+                        subject: `[EBA System] ${alert.severity.toUpperCase()}: ${alert.title}`,
+                        html: this.generateEmailHTML(alert, user)
+                    });
+
+                    if (!result) {
+                        console.warn('[EBA System] sendEmail returned no result', {
+                            alertId: alert._id,
+                            to: user.email
+                        });
+                        continue;
+                    }
+
+                    console.log('[EBA System] email sent successfully', {
+                        alertId: alert._id,
+                        to: user.email
+                    });
+
+                    await Notification.updateMany(
+                        { alertId: alert._id, userId: user._id },
+                        { isEmailSent: true }
+                    );
+                } catch (error) {
+                    console.error('[EBA System] email failed for recipient', {
+                        alertId: alert._id,
+                        to: user.email,
+                        error: error.message
+                    });
+                }
             }
 
             console.log(`[EBA System] Sent ${users.length} email notifications for alert ${alert._id}`);
         } catch (error) {
             console.error('[EBA System] Error sending email notifications:', error);
         } finally {
-            // Remove from tracking set after delay
             setTimeout(() => {
                 this.sendingEmails.delete(emailKey);
             }, 5000);
