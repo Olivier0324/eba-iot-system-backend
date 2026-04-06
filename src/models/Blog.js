@@ -53,14 +53,6 @@ const BlogSchema = new mongoose.Schema({
         type: Date,
         default: null
     },
-    views: {
-        type: Number,
-        default: 0
-    },
-    likes: {
-        type: Number,
-        default: 0
-    },
     createdBy: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User',

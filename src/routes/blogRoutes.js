@@ -19,7 +19,7 @@ router.get('/categories', getBlogCategories);
 router.get('/:slug', getBlogBySlug);
 
 // Admin only routes
-router.post('/',  createBlog);
+router.post('/', protect, authorize('admin'), createBlog);
 router.get('/admin/:id', protect, authorize('admin'), getBlogById);
 router.put('/:id', protect, authorize('admin'), updateBlog);
 router.delete('/:id', protect, authorize('admin'), deleteBlog);

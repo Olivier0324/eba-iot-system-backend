@@ -1,15 +1,23 @@
-// controllers/AuthController.js
+// controllers/UserController.js
 import { User } from "../models/Users.js";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import { sendOTP } from "../utils/sendEmail.js";
 
-// Login - Send OTP
+// ==================== AUTHENTICATION METHODS ====================
+
+/**
+ * @swagger
+ * /auth/login:
+ *   post:
+ *     summary: Login with email and password
+ *     description: Sends OTP to user's email for verification
+ *     tags: [Authentication]
+ */
 export const login = async (req, res) => {
     const { email, password } = req.body;
 
     try {
-        // Validate input
         if (!email || !password) {
             return res.status(400).json({
                 success: false,
@@ -25,9 +33,13 @@ export const login = async (req, res) => {
             });
         }
 
-        // Check if account is active
-      
-        // Verify password
+        if (!user.isActive) {
+            return res.status(401).json({
+                success: false,
+                message: "Account is disabled. Please contact administrator."
+            });
+        }
+
         const isPasswordValid = await bcrypt.compare(password, user.password);
         if (!isPasswordValid) {
             return res.status(400).json({
@@ -36,17 +48,14 @@ export const login = async (req, res) => {
             });
         }
 
-        // Generate OTP
         const otp = String(Math.floor(100000 + Math.random() * 900000));
-        const otpExpiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
+        const otpExpiresAt = new Date(Date.now() + 5 * 60 * 1000);
 
-        // Update user with OTP
         await User.findByIdAndUpdate(user._id, {
             otp,
             otpExpiresAt
         });
 
-        // Send OTP email
         await sendOTP(user.email, otp);
 
         res.status(200).json({
@@ -54,7 +63,7 @@ export const login = async (req, res) => {
             message: "OTP sent to your email",
             data: {
                 email: user.email,
-                expiresIn: 300 // 5 minutes in seconds
+                expiresIn: 300
             }
         });
 
@@ -67,12 +76,17 @@ export const login = async (req, res) => {
     }
 };
 
-// Verify OTP and Complete Login
+/**
+ * @swagger
+ * /auth/verify-otp:
+ *   post:
+ *     summary: Verify OTP and complete login
+ *     tags: [Authentication]
+ */
 export const verifyOTP = async (req, res) => {
     const { otp, email } = req.body;
 
     try {
-        // Validate input
         if (!otp || !email) {
             return res.status(400).json({
                 success: false,
@@ -88,9 +102,13 @@ export const verifyOTP = async (req, res) => {
             });
         }
 
-        
+        if (!user.isActive) {
+            return res.status(401).json({
+                success: false,
+                message: "Account is disabled"
+            });
+        }
 
-        // Verify OTP
         if (user.otp !== otp) {
             return res.status(400).json({
                 success: false,
@@ -98,7 +116,6 @@ export const verifyOTP = async (req, res) => {
             });
         }
 
-        // Check OTP expiration
         if (user.otpExpiresAt < new Date()) {
             return res.status(400).json({
                 success: false,
@@ -106,7 +123,6 @@ export const verifyOTP = async (req, res) => {
             });
         }
 
-        // Update user login status
         user.isVerified = true;
         user.isLoggedIn = true;
         user.lastLogin = new Date();
@@ -115,7 +131,6 @@ export const verifyOTP = async (req, res) => {
 
         await user.save();
 
-        // Generate JWT token
         const token = jwt.sign(
             {
                 id: user._id,
@@ -127,7 +142,6 @@ export const verifyOTP = async (req, res) => {
             { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
         );
 
-        // Prepare user data for response (exclude sensitive fields)
         const userData = {
             id: user._id,
             username: user.username,
@@ -156,7 +170,13 @@ export const verifyOTP = async (req, res) => {
     }
 };
 
-// Resend OTP
+/**
+ * @swagger
+ * /auth/resend-otp:
+ *   post:
+ *     summary: Resend OTP
+ *     tags: [Authentication]
+ */
 export const resendOTP = async (req, res) => {
     const { email } = req.body;
 
@@ -176,7 +196,6 @@ export const resendOTP = async (req, res) => {
             });
         }
 
-        // Check if account is active
         if (!user.isActive) {
             return res.status(401).json({
                 success: false,
@@ -184,17 +203,14 @@ export const resendOTP = async (req, res) => {
             });
         }
 
-        // Generate new OTP
         const otp = String(Math.floor(100000 + Math.random() * 900000));
         const otpExpiresAt = new Date(Date.now() + 5 * 60 * 1000);
 
-        // Update user
         await User.findByIdAndUpdate(user._id, {
             otp,
             otpExpiresAt
         });
 
-        // Send new OTP
         await sendOTP(user.email, otp);
 
         res.status(200).json({
@@ -214,12 +230,17 @@ export const resendOTP = async (req, res) => {
     }
 };
 
-// Logout
+/**
+ * @swagger
+ * /auth/logout:
+ *   post:
+ *     summary: Logout user
+ *     tags: [Authentication]
+ */
 export const logout = async (req, res) => {
     try {
-        const userId = req.user.id; // From auth middleware
+        const userId = req.user.id;
 
-        // Update user's login status
         await User.findByIdAndUpdate(userId, {
             isLoggedIn: false,
             lastLogout: new Date()
@@ -238,7 +259,13 @@ export const logout = async (req, res) => {
     }
 };
 
-// Get Current User Profile
+/**
+ * @swagger
+ * /auth/me:
+ *   get:
+ *     summary: Get current user profile
+ *     tags: [Authentication]
+ */
 export const getCurrentUser = async (req, res) => {
     try {
         const user = await User.findById(req.user.id).select('-password -otp -otpExpiresAt');
@@ -263,7 +290,13 @@ export const getCurrentUser = async (req, res) => {
     }
 };
 
-// Change Password
+/**
+ * @swagger
+ * /auth/change-password:
+ *   put:
+ *     summary: Change user password
+ *     tags: [Authentication]
+ */
 export const changePassword = async (req, res) => {
     const { currentPassword, newPassword } = req.body;
 
@@ -275,6 +308,13 @@ export const changePassword = async (req, res) => {
             });
         }
 
+        if (newPassword.length < 6) {
+            return res.status(400).json({
+                success: false,
+                message: "New password must be at least 6 characters"
+            });
+        }
+
         const user = await User.findById(req.user.id);
         if (!user) {
             return res.status(404).json({
@@ -283,7 +323,6 @@ export const changePassword = async (req, res) => {
             });
         }
 
-        // Verify current password
         const isPasswordValid = await bcrypt.compare(currentPassword, user.password);
         if (!isPasswordValid) {
             return res.status(400).json({
@@ -292,10 +331,8 @@ export const changePassword = async (req, res) => {
             });
         }
 
-        // Hash new password
         const hashedPassword = await bcrypt.hash(newPassword, 10);
 
-        // Update password and force re-login
         user.password = hashedPassword;
         user.isLoggedIn = false;
         await user.save();
@@ -313,7 +350,13 @@ export const changePassword = async (req, res) => {
     }
 };
 
-// Update User Profile
+/**
+ * @swagger
+ * /auth/profile:
+ *   put:
+ *     summary: Update user profile
+ *     tags: [Authentication]
+ */
 export const updateProfile = async (req, res) => {
     const { username, email } = req.body;
 
@@ -326,7 +369,6 @@ export const updateProfile = async (req, res) => {
             });
         }
 
-        // Check if email is already taken by another user
         if (email && email !== user.email) {
             const existingUser = await User.findOne({ email, _id: { $ne: user._id } });
             if (existingUser) {
@@ -360,5 +402,352 @@ export const updateProfile = async (req, res) => {
             success: false,
             message: "Internal server error"
         });
+    }
+};
+
+// ==================== USER MANAGEMENT METHODS (ADMIN ONLY) ====================
+/**
+ * @swagger
+ * /users:
+ *   get:
+ *     summary: Get all users with pagination and filters
+ *     tags: [User Management]
+ *     security:
+ *       - bearerAuth: []
+ */
+export const getAllUsers = async (req, res) => {
+    try {
+        const { page = 1, limit = 20, role, isActive, search } = req.query;
+
+        const query = {};
+        if (role && role !== '' && role !== 'all') {
+            query.role = role;
+        }
+
+        if (isActive !== undefined && isActive !== '' && isActive !== 'all') {
+            if (isActive === 'true') {
+                query.isActive = true;
+            } else if (isActive === 'false') {
+                query.isActive = false;
+            }
+        }
+        if (search && search !== '') {
+            query.$or = [
+                { username: { $regex: search, $options: 'i' } },
+                { email: { $regex: search, $options: 'i' } }
+            ];
+        }
+
+        const users = await User.find(query)
+            .select('-password -otp -otpExpiresAt')
+            .sort({ createdAt: -1 })
+            .limit(parseInt(limit))
+            .skip((parseInt(page) - 1) * parseInt(limit));
+
+        const total = await User.countDocuments(query);
+
+        res.json({
+            success: true,
+            data: users,
+            pagination: {
+                currentPage: parseInt(page),
+                totalPages: Math.ceil(total / limit),
+                totalItems: total,
+                itemsPerPage: parseInt(limit)
+            }
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
+
+/**
+ * @swagger
+ * /users/{id}:
+ *   get:
+ *     summary: Get user by ID (Admin/Manager only)
+ *     tags: [User Management]
+ *     security:
+ *       - bearerAuth: []
+ */
+export const getUserById = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const user = await User.findById(id).select('-password -otp -otpExpiresAt');
+        if (!user) {
+            return res.status(404).json({ success: false, message: 'User not found' });
+        }
+
+        res.json({ success: true, data: user });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
+
+/**
+ * @swagger
+ * /users:
+ *   post:
+ *     summary: Create new user (Admin/Manager only)
+ *     tags: [User Management]
+ *     security:
+ *       - bearerAuth: []
+ */
+export const createUser = async (req, res) => {
+    try {
+        const { username, email, password, role, isActive } = req.body;
+
+        if (!username || !email || !password) {
+            return res.status(400).json({
+                success: false,
+                message: 'Username, email and password are required'
+            });
+        }
+
+        const existingUser = await User.findOne({ email });
+        if (existingUser) {
+            return res.status(400).json({
+                success: false,
+                message: 'User with this email already exists'
+            });
+        }
+
+        const hashedPassword = await bcrypt.hash(password, 10);
+
+        const user = new User({
+            username,
+            email,
+            password: hashedPassword,
+            role: role || 'user',
+            isActive: isActive !== undefined ? isActive : true,
+            createdBy: req.user.id
+        });
+
+        await user.save();
+
+        const userData = user.toJSON();
+        delete userData.password;
+
+        res.status(201).json({
+            success: true,
+            message: 'User created successfully',
+            data: userData
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
+
+/**
+ * @swagger
+ * /users/{id}:
+ *   put:
+ *     summary: Update user (Admin/Manager only)
+ *     tags: [User Management]
+ *     security:
+ *       - bearerAuth: []
+ */
+export const updateUser = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { username, email, role, isActive } = req.body;
+
+        const user = await User.findById(id);
+        if (!user) {
+            return res.status(404).json({ success: false, message: 'User not found' });
+        }
+
+        if (email && email !== user.email) {
+            const existingUser = await User.findOne({ email, _id: { $ne: id } });
+            if (existingUser) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Email already in use'
+                });
+            }
+            user.email = email;
+        }
+
+        if (username) user.username = username;
+        if (role) user.role = role;
+        if (isActive !== undefined) user.isActive = isActive;
+
+        await user.save();
+
+        const userData = user.toJSON();
+
+        res.json({
+            success: true,
+            message: 'User updated successfully',
+            data: userData
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
+
+/**
+ * @swagger
+ * /users/{id}:
+ *   delete:
+ *     summary: Delete user (Admin only)
+ *     tags: [User Management]
+ *     security:
+ *       - bearerAuth: []
+ */
+export const deleteUser = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        if (id === req.user.id) {
+            return res.status(400).json({
+                success: false,
+                message: 'Cannot delete your own account'
+            });
+        }
+
+        const user = await User.findByIdAndDelete(id);
+        if (!user) {
+            return res.status(404).json({ success: false, message: 'User not found' });
+        }
+
+        res.json({
+            success: true,
+            message: 'User deleted successfully'
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
+
+/**
+ * @swagger
+ * /users/{id}/activate:
+ *   put:
+ *     summary: Activate/deactivate user account (Admin/Manager only)
+ *     tags: [User Management]
+ *     security:
+ *       - bearerAuth: []
+ */
+export const toggleUserStatus = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { isActive } = req.body;
+
+        if (id === req.user.id) {
+            return res.status(400).json({
+                success: false,
+                message: 'Cannot change your own account status'
+            });
+        }
+
+        const user = await User.findById(id);
+        if (!user) {
+            return res.status(404).json({ success: false, message: 'User not found' });
+        }
+
+        user.isActive = isActive;
+        if (!isActive) {
+            user.isLoggedIn = false;
+        }
+        await user.save();
+
+        res.json({
+            success: true,
+            message: `User ${isActive ? 'activated' : 'deactivated'} successfully`,
+            data: { id: user._id, isActive: user.isActive }
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
+
+/**
+ * @swagger
+ * /users/{id}/role:
+ *   put:
+ *     summary: Change user role (Admin only)
+ *     tags: [User Management]
+ *     security:
+ *       - bearerAuth: []
+ */
+export const changeUserRole = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { role } = req.body;
+
+        if (!['admin', 'manager', 'user'].includes(role)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid role. Must be admin, manager, or user'
+            });
+        }
+
+        if (id === req.user.id && req.user.role === 'admin' && role !== 'admin') {
+            return res.status(400).json({
+                success: false,
+                message: 'Admin cannot demote themselves'
+            });
+        }
+
+        const user = await User.findById(id);
+        if (!user) {
+            return res.status(404).json({ success: false, message: 'User not found' });
+        }
+
+        user.role = role;
+        await user.save();
+
+        res.json({
+            success: true,
+            message: `User role changed to ${role} successfully`,
+            data: { id: user._id, role: user.role }
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
+
+/**
+ * @swagger
+ * /users/stats:
+ *   get:
+ *     summary: Get user statistics (Admin/Manager only)
+ *     tags: [User Management]
+ *     security:
+ *       - bearerAuth: []
+ */
+export const getUserStats = async (req, res) => {
+    try {
+        const totalUsers = await User.countDocuments();
+        const activeUsers = await User.countDocuments({ isActive: true });
+        const inactiveUsers = await User.countDocuments({ isActive: false });
+
+        const admins = await User.countDocuments({ role: 'admin' });
+        const managers = await User.countDocuments({ role: 'manager' });
+        const regularUsers = await User.countDocuments({ role: 'user' });
+
+        const recentUsers = await User.find()
+            .select('username email role isActive createdAt')
+            .sort({ createdAt: -1 })
+            .limit(5);
+
+        res.json({
+            success: true,
+            data: {
+                total: totalUsers,
+                active: activeUsers,
+                inactive: inactiveUsers,
+                byRole: {
+                    admin: admins,
+                    manager: managers,
+                    user: regularUsers
+                },
+                recent: recentUsers
+            }
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
     }
 };

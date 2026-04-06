@@ -10,11 +10,11 @@ import { SensorData } from './models/SensorData.js';
 import SensorRouter from './routes/SensorRoutes.js';
 import reportRoutes from "./routes/ReportRoutes.js";
 import authRoutes from "./routes/AuthRoutes.js";
+import userRoutes from "./routes/userRoutes.js";
 import alertRoutes from './routes/AlertRoutes.js';
 import controlRoutes from './routes/ControlRoutes.js';
 import swaggerRoutes from './routes/swaggerRoutes.js';
 import blogRoutes from './routes/blogRoutes.js';
-import researchRoutes from './routes/researchRoutes.js';
 import contactRoutes from './routes/contactRoutes.js';
 
 import notificationRoutes from './routes/NotificationRoutes.js';
@@ -152,11 +152,11 @@ app.get('/', (req, res) => res.send('IoT Data API'));
 app.use('/api/v1/sensor', SensorRouter);
 app.use("/api/v1/reports", reportRoutes);
 app.use("/api/v1/auth", authRoutes);
+app.use("/api/v1/users", userRoutes);
 app.use("/api/v1/alerts", alertRoutes);
 app.use("/api/v1/control", controlRoutes);
 app.use("/api/v1/notifications", notificationRoutes);
 app.use('/api/v1/blog', blogRoutes);
-app.use('/api/v1/research', researchRoutes);
 app.use('/api/v1/contact', contactRoutes);
 
 // Error handling
