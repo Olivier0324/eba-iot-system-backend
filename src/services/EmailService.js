@@ -4,15 +4,21 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-// Configure email transporter
+// Configure email transporter - MODIFIED VERSION
 const transporter = nodemailer.createTransport({
-    service: 'gmail', // or use SMTP
+    host: 'smtp.gmail.com',
+    port: 2525,  // Changed from default 587
+    secure: false, // Must be false for port 2525
     auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASSWORD
+    },
+    tls: {
+        rejectUnauthorized: false // Sometimes needed for port 2525
     }
 });
 
+// Rest of your code remains EXACTLY the same
 export const sendEmail = async ({ to, subject, html, text }) => {
     try {
         const mailOptions = {
