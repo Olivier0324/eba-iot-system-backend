@@ -4,24 +4,75 @@ import nodemailer from "nodemailer";
 // Load environment variables
 dotenv.config();
 
-const transporter = nodemailer.createTransport({
-    host: 'smtp.gmail.com',
-    port: 2525,  // Render free tier compatible port
-    secure: false, // Must be false for port 2525
-    auth: {
-        user: process.env.EMAIL_USER, // Your Gmail address
-        pass: process.env.EMAIL_PASSWORD  // 16-character App Password
-    },
-    tls: {
-        rejectUnauthorized: false // Helps with port 2525 connections
-    }
-});
+// Create transporter with IPv4 preference
+const createTransporter = () => {
+    return nodemailer.createTransport({
+        host: 'smtp.gmail.com',
+        port: 465,  // Try SSL port instead
+        secure: true, // SSL
+        auth: {
+            user: process.env.EMAIL_USER,
+            pass: process.env.EMAIL_PASSWORD
+        },
+        tls: {
+            rejectUnauthorized: false,
+            ciphers: 'SSLv3'
+        },
+        // Force IPv4
+        family: 4,
+        // Connection timeout
+        connectionTimeout: 10000,
+        // Debug output
+        debug: true
+    });
+};
 
 export const sendOTP = async (email, otp) => {
     try {
-        // Google-styled HTML template (unchanged)
+        // Try multiple ports if needed
+        let transporter;
+        let lastError;
+
+        // Try port 465 first (most reliable for Gmail)
+        try {
+            transporter = nodemailer.createTransport({
+                host: 'smtp.gmail.com',
+                port: 465,
+                secure: true,
+                auth: {
+                    user: process.env.EMAIL_USER,
+                    pass: process.env.EMAIL_PASSWORD
+                },
+                family: 4, // Force IPv4
+                connectionTimeout: 10000
+            });
+
+            // Verify connection before sending
+            await transporter.verify();
+            console.log("✅ SMTP connection verified on port 465");
+        } catch (err) {
+            console.log("Port 465 failed, trying port 587...");
+            lastError = err;
+
+            // Try port 587 as fallback
+            transporter = nodemailer.createTransport({
+                host: 'smtp.gmail.com',
+                port: 587,
+                secure: false,
+                auth: {
+                    user: process.env.EMAIL_USER,
+                    pass: process.env.EMAIL_PASSWORD
+                },
+                family: 4, // Force IPv4
+                connectionTimeout: 10000,
+                requireTLS: true
+            });
+
+            await transporter.verify();
+        }
+
         const mailOptions = {
-            from: `"EBA IoT System" <${process.env.nodemailer_app_name}>`,
+            from: `"EBA IoT System" <${process.env.EMAIL_USER}>`,
             to: email,
             subject: "Your Verification Code",
             html: `
@@ -48,7 +99,7 @@ export const sendOTP = async (email, otp) => {
                             margin-bottom: 30px;
                         }
                         .logo h1 {
-                            color: #4285F4; /* Google Blue */
+                            color: #4285F4;
                             margin: 0;
                             font-size: 24px;
                         }
@@ -85,15 +136,6 @@ export const sendOTP = async (email, otp) => {
                             font-size: 12px;
                             color: #9aa0a6;
                         }
-                        .button {
-                            background-color: #4285F4;
-                            color: white;
-                            padding: 12px 24px;
-                            text-decoration: none;
-                            border-radius: 4px;
-                            font-weight: bold;
-                            display: inline-block;
-                        }
                     </style>
                 </head>
                 <body>
@@ -120,11 +162,11 @@ export const sendOTP = async (email, otp) => {
             `
         };
 
-        await transporter.sendMail(mailOptions);
-        console.log(`OTP sent successfully to ${email}`);
+        const info = await transporter.sendMail(mailOptions);
+        console.log(`✅ OTP sent successfully to ${email}: ${info.messageId}`);
         return { success: true, message: "OTP sent successfully" };
     } catch (error) {
-        console.error("Error sending OTP:", error);
-        return { success: false, message: "Failed to send OTP" };
+        console.error("❌ Error sending OTP:", error);
+        return { success: false, message: "Failed to send OTP", error: error.message };
     }
 };
