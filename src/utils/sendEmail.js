@@ -5,18 +5,23 @@ import nodemailer from "nodemailer";
 dotenv.config();
 
 const transporter = nodemailer.createTransport({
-    service: "gmail",
+    host: 'smtp.gmail.com',
+    port: 2525,  // Render free tier compatible port
+    secure: false, // Must be false for port 2525
     auth: {
-        user: process.env.nodemailer_app_name, // Your Gmail address
-        pass: process.env.nodemailer_password  // 16-character App Password
+        user: process.env.EMAIL_USER, // Your Gmail address
+        pass: process.env.EMAIL_PASSWORD  // 16-character App Password
+    },
+    tls: {
+        rejectUnauthorized: false // Helps with port 2525 connections
     }
 });
 
 export const sendOTP = async (email, otp) => {
     try {
-        // Google-styled HTML template
+        // Google-styled HTML template (unchanged)
         const mailOptions = {
-            from: `"EBA IoT System" <${process.env.nodemailer_app_name}>`, // Display Name + Email
+            from: `"EBA IoT System" <${process.env.nodemailer_app_name}>`,
             to: email,
             subject: "Your Verification Code",
             html: `
