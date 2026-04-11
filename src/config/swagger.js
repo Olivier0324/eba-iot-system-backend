@@ -1,6 +1,5 @@
 // config/swagger.js
 import swaggerJsdoc from 'swagger-jsdoc';
-import swaggerUi from 'swagger-ui-express';
 
 const options = {
     definition: {
@@ -198,20 +197,4 @@ const swaggerUiWithCors = (req, res, next) => {
     next();
 };
 
-const setupSwaggerUi = swaggerUi.setup(specs, {
-    explorer: true,
-    customCss: '.swagger-ui .topbar { display: none }',
-    customSiteTitle: 'EBA System API Documentation',
-    swaggerOptions: {
-        persistAuthorization: true,
-        displayRequestDuration: true,
-        filter: true,
-        tryItOutEnabled: true,
-        syntaxHighlight: {
-            activate: true,
-            theme: 'agate'
-        }
-    }
-});
-
-export { swaggerUi, setupSwaggerUi, specs, swaggerUiWithCors };
+export { specs, swaggerUiWithCors };
