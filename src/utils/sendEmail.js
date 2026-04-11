@@ -1,81 +1,9 @@
 import dotenv from "dotenv";
-import nodemailer from "nodemailer";
+import { sendTransactionalEmail } from "./transactionalEmail.js";
 
-// Load environment variables
 dotenv.config();
 
-// Create transporter with IPv4 preference
-const createTransporter = () => {
-    return nodemailer.createTransport({
-        host: 'smtp.gmail.com',
-        port: 465,  // Try SSL port instead
-        secure: true, // SSL
-        auth: {
-            user: process.env.EMAIL_USER,
-            pass: process.env.EMAIL_PASSWORD
-        },
-        tls: {
-            rejectUnauthorized: false,
-            ciphers: 'SSLv3'
-        },
-        // Force IPv4
-        family: 4,
-        // Connection timeout
-        connectionTimeout: 10000,
-        // Debug output
-        debug: true
-    });
-};
-
-export const sendOTP = async (email, otp) => {
-    try {
-        // Try multiple ports if needed
-        let transporter;
-        let lastError;
-
-        // Try port 465 first (most reliable for Gmail)
-        try {
-            transporter = nodemailer.createTransport({
-                host: 'smtp.gmail.com',
-                port: 465,
-                secure: true,
-                auth: {
-                    user: process.env.EMAIL_USER,
-                    pass: process.env.EMAIL_PASSWORD
-                },
-                family: 4, // Force IPv4
-                connectionTimeout: 10000
-            });
-
-            // Verify connection before sending
-            await transporter.verify();
-            console.log("✅ SMTP connection verified on port 465");
-        } catch (err) {
-            console.log("Port 465 failed, trying port 587...");
-            lastError = err;
-
-            // Try port 587 as fallback
-            transporter = nodemailer.createTransport({
-                host: 'smtp.gmail.com',
-                port: 587,
-                secure: false,
-                auth: {
-                    user: process.env.EMAIL_USER,
-                    pass: process.env.EMAIL_PASSWORD
-                },
-                family: 4, // Force IPv4
-                connectionTimeout: 10000,
-                requireTLS: true
-            });
-
-            await transporter.verify();
-        }
-
-        const mailOptions = {
-            from: `"EBA IoT System" <${process.env.EMAIL_USER}>`,
-            to: email,
-            subject: "Your Verification Code",
-            html: `
+const otpMailHtml = (otp) => `
                 <!DOCTYPE html>
                 <html>
                 <head>
@@ -146,7 +74,7 @@ export const sendOTP = async (email, otp) => {
                         <div class="content">
                             <h2>Verify your email address</h2>
                             <p>Use the following verification code to complete your sign in. This code will expire in 10 minutes.</p>
-                            
+
                             <div class="otp-box">
                                 <span class="otp-code">${otp}</span>
                             </div>
@@ -159,14 +87,48 @@ export const sendOTP = async (email, otp) => {
                     </div>
                 </body>
                 </html>
-            `
-        };
+            `;
 
-        const info = await transporter.sendMail(mailOptions);
-        console.log(`✅ OTP sent successfully to ${email}: ${info.messageId}`);
+/**
+ * OTP email: uses Resend (HTTPS) when RESEND_API_KEY is set — reliable on Vercel;
+ * otherwise Gmail SMTP when EMAIL_USER + EMAIL_PASSWORD are set.
+ */
+export const sendOTP = async (email, otp) => {
+    try {
+        const hasResend = Boolean(process.env.RESEND_API_KEY);
+        const hasSmtp =
+            Boolean(process.env.EMAIL_USER) && Boolean(process.env.EMAIL_PASSWORD);
+
+        if (!hasResend && !hasSmtp) {
+            console.error("❌ sendOTP: set RESEND_API_KEY or EMAIL_USER + EMAIL_PASSWORD");
+            return {
+                success: false,
+                message: "Email is not configured on the server",
+                error: "Missing RESEND_API_KEY or SMTP credentials"
+            };
+        }
+
+        const result = await sendTransactionalEmail({
+            to: email,
+            subject: "Your Verification Code",
+            html: otpMailHtml(otp)
+        });
+
+        if (!result.success) {
+            return {
+                success: false,
+                message: "Failed to send OTP",
+                error: result.error || "Unknown error"
+            };
+        }
+
         return { success: true, message: "OTP sent successfully" };
     } catch (error) {
         console.error("❌ Error sending OTP:", error);
-        return { success: false, message: "Failed to send OTP", error: error.message };
+        return {
+            success: false,
+            message: "Failed to send OTP",
+            error: error instanceof Error ? error.message : String(error)
+        };
     }
 };
