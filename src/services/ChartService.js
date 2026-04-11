@@ -1,30 +1,52 @@
 // services/ChartService.js
-import { ChartJSNodeCanvas } from "chartjs-node-canvas";
 import { registerables } from "chart.js";
 
 // ── Palette (hex approximations of your Tailwind theme) ──
 const P = {
-    eco500: "#29B84A",   // hsl(145,62%,48%)  – brand green
-    ocean500: "#4931C9",   // hsl(250,62%,48%)  – brand blue/purple
-    teal500: "#17A3B8",   // hsl(190,62%,48%)  – teal
-    alert500: "#C46417",   // hsl( 25,62%,48%)  – orange/alert
-    warn500: "#6DB817",   // hsl( 85,62%,48%)  – yellow-green
+    eco500: "#29B84A",
+    ocean500: "#4931C9",
+    teal500: "#17A3B8",
+    alert500: "#C46417",
+    warn500: "#6DB817",
     grid: "#E8ECF0",
     text: "#555F6E",
 };
 
-const chartCanvas = new ChartJSNodeCanvas({
-    width: 860,
-    height: 420,
-    chartCallback: (ChartJS) => {
-        ChartJS.register(...registerables);
-    },
-});
+// Lazy-load ChartJSNodeCanvas so a missing/incompatible native `canvas`
+// binary (e.g. Windows build running on Vercel's Linux) doesn't crash the
+// entire serverless function at import time.
+let _chartCanvas = null;
+let _canvasAvailable = null;
+
+const getChartCanvas = async () => {
+    if (_canvasAvailable === false) return null;
+    if (_chartCanvas !== null) return _chartCanvas;
+
+    try {
+        const { ChartJSNodeCanvas } = await import("chartjs-node-canvas");
+        _chartCanvas = new ChartJSNodeCanvas({
+            width: 860,
+            height: 420,
+            chartCallback: (ChartJS) => {
+                ChartJS.register(...registerables);
+            },
+        });
+        _canvasAvailable = true;
+        return _chartCanvas;
+    } catch (e) {
+        console.warn("⚠️  Chart generation unavailable (canvas not supported in this environment):", e.message);
+        _canvasAvailable = false;
+        return null;
+    }
+};
 
 // ─────────────────────────────────────────────────────────
 // LINE CHART  (temperature + humidity + soil + water)
 // ─────────────────────────────────────────────────────────
 export const generateChart = async (labels, datasets) => {
+    const canvas = await getChartCanvas();
+    if (!canvas) return null;
+
     const config = {
         type: "line",
         data: { labels, datasets },
@@ -55,7 +77,6 @@ export const generateChart = async (labels, datasets) => {
                 },
             },
             scales: {
-                // Left axis – percentages (humidity, soil, water)
                 y: {
                     type: "linear",
                     position: "left",
@@ -74,7 +95,6 @@ export const generateChart = async (labels, datasets) => {
                         font: { size: 10 },
                     },
                 },
-                // Right axis – temperature (°C)
                 y2: {
                     type: "linear",
                     position: "right",
@@ -111,17 +131,12 @@ export const generateChart = async (labels, datasets) => {
         },
     };
 
-    return await chartCanvas.renderToBuffer(config);
+    return await canvas.renderToBuffer(config);
 };
 
 // ─────────────────────────────────────────────────────────
 // CONVENIENCE BUILDERS  (called from PdfService)
 // ─────────────────────────────────────────────────────────
-
-/**
- * Build a full "all metrics" chart with dual axes.
- * Pass the raw data array; this function handles sampling & dataset creation.
- */
 export const generateFullChart = async (data, metricFilter) => {
     const step = Math.max(1, Math.floor(data.length / 40));
     const sample = data.filter((_, i) => i % step === 0);
@@ -134,7 +149,6 @@ export const generateFullChart = async (data, metricFilter) => {
     );
 
     const datasets = [];
-
     const only = metricFilter && metricFilter !== "all" ? metricFilter : null;
 
     if (!only || only === "temperature") {
@@ -145,7 +159,7 @@ export const generateFullChart = async (data, metricFilter) => {
             backgroundColor: `${P.eco500}22`,
             fill: false,
             pointRadius: 2,
-            yAxisID: "y2",   // ← right axis
+            yAxisID: "y2",
         });
     }
 
@@ -199,6 +213,9 @@ export const generateFullChart = async (data, metricFilter) => {
 // PIE / DOUGHNUT CHART  (CO₂ distribution)
 // ─────────────────────────────────────────────────────────
 export const generatePieChart = async (data) => {
+    const canvas = await getChartCanvas();
+    if (!canvas) return null;
+
     const config = {
         type: "doughnut",
         data: {
@@ -247,5 +264,5 @@ export const generatePieChart = async (data) => {
         },
     };
 
-    return await chartCanvas.renderToBuffer(config);
+    return await canvas.renderToBuffer(config);
 };

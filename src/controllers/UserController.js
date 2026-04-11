@@ -56,7 +56,16 @@ export const login = async (req, res) => {
             otpExpiresAt
         });
 
-        await sendOTP(user.email, otp);
+        const sent = await sendOTP(user.email, otp);
+        if (!sent.success) {
+            return res.status(503).json({
+                success: false,
+                message: sent.message || "Could not send verification email",
+                ...(process.env.NODE_ENV !== "production" && sent.error
+                    ? { detail: sent.error }
+                    : {})
+            });
+        }
 
         res.status(200).json({
             success: true,
@@ -211,7 +220,16 @@ export const resendOTP = async (req, res) => {
             otpExpiresAt
         });
 
-        await sendOTP(user.email, otp);
+        const sent = await sendOTP(user.email, otp);
+        if (!sent.success) {
+            return res.status(503).json({
+                success: false,
+                message: sent.message || "Could not send verification email",
+                ...(process.env.NODE_ENV !== "production" && sent.error
+                    ? { detail: sent.error }
+                    : {})
+            });
+        }
 
         res.status(200).json({
             success: true,

@@ -132,7 +132,9 @@ export const generatePDF = async (rawData, options) => {
     if (data.length === 0)
         throw new Error("No records with sensor readings found after filtering");
 
-    const reportsDir = path.join(process.cwd(), "reports");
+    const reportsDir = process.env.VERCEL
+        ? "/tmp/reports"
+        : path.join(process.cwd(), "reports");
     if (!fs.existsSync(reportsDir)) fs.mkdirSync(reportsDir, { recursive: true });
 
     const fileName = `report_${Date.now()}.pdf`;
