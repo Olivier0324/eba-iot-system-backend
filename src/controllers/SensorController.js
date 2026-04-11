@@ -3,7 +3,7 @@ import { SensorData } from '../models/SensorData.js';
 //get cleared data for dashboard graph
 export const getAllData = async (req, res) => {
     try {
-        const sensorData = await SensorData.find().sort({ createdAt: -1, createdAt: -1 }).limit(50);
+        const sensorData = await SensorData.find().sort({ createdAt: -1, createdAt: -1 });
         res.status(200).json({
             success: true,
             data: sensorData
