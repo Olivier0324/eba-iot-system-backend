@@ -4,11 +4,12 @@ import nodemailer from "nodemailer";
 dotenv.config();
 
 const RESEND_API = "https://api.resend.com/emails";
+const BREVO_API  = "https://api.brevo.com/v3/smtp/email";
 
-/** Display name + address Resend accepts (set RESEND_FROM after you verify a domain). */
-const defaultResendFrom = () =>
-    process.env.RESEND_FROM?.trim() ||
-    `"EBA IoT System" <onboarding@resend.dev>`;
+const defaultFrom = () =>
+    process.env.EMAIL_FROM?.trim() ||
+    process.env.EMAIL_USER?.trim() ||
+    "cyuzuzokwizeraolivier2@gmail.com";
 
 const buildSmtpTransporter = (port, secure, extra = {}) =>
     nodemailer.createTransport({
@@ -27,23 +28,58 @@ const buildSmtpTransporter = (port, secure, extra = {}) =>
     });
 
 /**
- * Sends one transactional HTML email. Prefer Resend (HTTPS) on Vercel/serverless
- * where SMTP is unreliable; falls back to Gmail SMTP when only EMAIL_* is set.
- *
- * Env: RESEND_API_KEY (+ optional RESEND_FROM), or EMAIL_USER + EMAIL_PASSWORD.
+ * Priority order:
+ *  1. Brevo  — HTTPS API, no domain needed, free 300/day  (set BREVO_API_KEY)
+ *  2. Resend — HTTPS API, needs verified domain            (set RESEND_API_KEY)
+ *  3. Gmail SMTP — works locally, blocked on Vercel        (set EMAIL_USER + EMAIL_PASSWORD)
  */
 export const sendTransactionalEmail = async ({ to, subject, html, text }) => {
     const toList = Array.isArray(to) ? to : [to];
 
+    // ── 1. Brevo ────────────────────────────────────────────────
+    if (process.env.BREVO_API_KEY) {
+        try {
+            const res = await fetch(BREVO_API, {
+                method: "POST",
+                headers: {
+                    "api-key": process.env.BREVO_API_KEY,
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    sender: {
+                        email: defaultFrom(),
+                        name: "EBA IoT System"
+                    },
+                    to: toList.map(email => ({ email })),
+                    subject,
+                    htmlContent: html || text,
+                    textContent: text || (html ? html.replace(/<[^>]*>/g, "") : undefined)
+                })
+            });
+
+            const data = await res.json().catch(() => ({}));
+
+            if (!res.ok) {
+                const msg = data?.message || `Brevo HTTP ${res.status}`;
+                console.error("❌ Brevo error:", msg, data);
+                return { success: false, error: msg };
+            }
+
+            console.log(`📧 Email sent via Brevo to ${toList.join(", ")}`);
+            return { success: true, messageId: data?.messageId || "brevo" };
+        } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            console.error("❌ Brevo request failed:", message);
+            return { success: false, error: message };
+        }
+    }
+
+    // ── 2. Resend ───────────────────────────────────────────────
     if (process.env.RESEND_API_KEY) {
         try {
-            const body = {
-                from: defaultResendFrom(),
-                to: toList,
-                subject,
-                html: html || undefined,
-                text: text || (html ? html.replace(/<[^>]*>/g, "") : undefined)
-            };
+            const fromAddr =
+                process.env.RESEND_FROM?.trim() ||
+                `"EBA IoT System" <onboarding@resend.dev>`;
 
             const res = await fetch(RESEND_API, {
                 method: "POST",
@@ -51,7 +87,13 @@ export const sendTransactionalEmail = async ({ to, subject, html, text }) => {
                     Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
                     "Content-Type": "application/json"
                 },
-                body: JSON.stringify(body)
+                body: JSON.stringify({
+                    from: fromAddr,
+                    to: toList,
+                    subject,
+                    html: html || undefined,
+                    text: text || (html ? html.replace(/<[^>]*>/g, "") : undefined)
+                })
             });
 
             const data = await res.json().catch(() => ({}));
@@ -65,9 +107,8 @@ export const sendTransactionalEmail = async ({ to, subject, html, text }) => {
                 return { success: false, error: typeof msg === "string" ? msg : JSON.stringify(msg) };
             }
 
-            const messageId = data?.id;
-            console.log(`📧 Email sent via Resend to ${toList.join(", ")}: ${messageId}`);
-            return { success: true, messageId: messageId || "resend" };
+            console.log(`📧 Email sent via Resend to ${toList.join(", ")}: ${data?.id}`);
+            return { success: true, messageId: data?.id || "resend" };
         } catch (err) {
             const message = err instanceof Error ? err.message : String(err);
             console.error("❌ Resend request failed:", message);
@@ -75,10 +116,11 @@ export const sendTransactionalEmail = async ({ to, subject, html, text }) => {
         }
     }
 
+    // ── 3. Gmail SMTP (local dev only — blocked on Vercel) ──────
     if (!process.env.EMAIL_USER || !process.env.EMAIL_PASSWORD) {
         return {
             success: false,
-            error: "Set RESEND_API_KEY (Vercel) or EMAIL_USER + EMAIL_PASSWORD (SMTP)"
+            error: "No email provider configured. Set BREVO_API_KEY (recommended), RESEND_API_KEY, or EMAIL_USER + EMAIL_PASSWORD."
         };
     }
 

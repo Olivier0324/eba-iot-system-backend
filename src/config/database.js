@@ -3,7 +3,15 @@ import mongoose from "mongoose";
 import dotenv from 'dotenv';
 dotenv.config();
 
+// Cache the connection across serverless invocations so each cold start
+// doesn't open a new connection to MongoDB Atlas.
+let isConnected = false;
+
 export const connectDB = async () => {
+    if (isConnected && mongoose.connection.readyState === 1) {
+        console.log('♻️  Reusing cached DB connection');
+        return;
+    }
     try {
         // Set mongoose options for better reliability
         mongoose.set('strictQuery', true);
@@ -15,13 +23,16 @@ export const connectDB = async () => {
         });
 
         console.log(`✅ MongoDB Connected: ${conn.connection.host}`);
+        isConnected = true;
 
         // Handle connection errors after initial connection
         mongoose.connection.on('error', (err) => {
+            isConnected = false;
             console.error('MongoDB connection error:', err);
         });
 
         mongoose.connection.on('disconnected', () => {
+            isConnected = false;
             console.log('MongoDB disconnected');
         });
 

@@ -44,7 +44,7 @@ const io = initSocket(server);
 };
 */
 
-app.use(cors([]));
+app.use(cors());
 app.use(express.json());
 app.use(express.static('public'));
 app.use('/reports', express.static(path.join(process.cwd(), 'uploads', 'reports')));
@@ -234,45 +234,42 @@ const handle404 = (req, res) => {
     });
 };
 
+// Register routes at load time so Vercel's serverless Express handler sees them immediately
+// (Vercel requires `export default app` or `app.listen`; we export `app` and only listen off-Vercel.)
+setupRoutes();
+
+app.use((req, res) => {
+    handle404(req, res);
+});
+
+app.use((err, req, res, next) => {
+    console.error('Error:', err.stack);
+    res.status(500).json({
+        success: false,
+        message: err.message || 'Internal server error',
+        ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
+    });
+});
+
 // ==================== Start Server Only After DB Connection ====================
 const startServer = async () => {
     try {
-        // Wait for database connection
         await connectDB();
         console.log('✅ Database connected, starting server...');
 
-        // Start MQTT after DB is connected
         initMQTT();
 
-        // Setup routes
-        setupRoutes();
-
-        // ==================== 404 Handler - MUST BE LAST ====================
-        // FIX: Use a function that checks if no other route matched
-        // This is the proper way to handle 404 in Express without path-to-regexp issues
-        app.use((req, res, next) => {
-            // If we reach here, no route matched
-            handle404(req, res);
-        });
-
-        // Error handling middleware - ALWAYS LAST
-        app.use((err, req, res, next) => {
-            console.error('Error:', err.stack);
-            res.status(500).json({
-                success: false,
-                message: err.message || 'Internal server error',
-                ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
+        // Vercel sets VERCEL when running as serverless — do not call server.listen (export default app handles HTTP).
+        if (!process.env.VERCEL) {
+            const PORT = process.env.PORT || 3000;
+            server.listen(PORT, () => {
+                console.log(`🚀 Server running on port ${PORT}`);
+                console.log(`📚 API Documentation: http://localhost:${PORT}/api-docs`);
+                console.log(`💚 Health Check: http://localhost:${PORT}/health`);
             });
-        });
-
-        // Start HTTP server
-        const PORT = process.env.PORT || 3000;
-        server.listen(PORT, () => {
-            console.log(`🚀 Server running on port ${PORT}`);
-            console.log(`📚 API Documentation: http://localhost:${PORT}/api-docs`);
-            console.log(`💚 Health Check: http://localhost:${PORT}/health`);
-        });
-
+        } else {
+            console.log('✅ Running on Vercel (serverless); HTTP handled without server.listen');
+        }
     } catch (error) {
         console.error('❌ Failed to start server:', error);
         process.exit(1);
@@ -318,4 +315,5 @@ process.on('unhandledRejection', (reason, promise) => {
 
 startServer();
 
+export default app;
 export { mqttClient, pendingRequests, getIo, latestSensorData, latestDeviceStatus };
