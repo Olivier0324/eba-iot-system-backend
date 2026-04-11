@@ -51,6 +51,66 @@ class NotificationService {
             throw error;
         }
     }
+    async getUserNotifications(userId, options = {}) {
+        const page = Math.max(1, parseInt(String(options.page ?? 1), 10) || 1);
+        const limit = Math.min(
+            100,
+            Math.max(1, parseInt(String(options.limit ?? 20), 10) || 20),
+        );
+        const skip = (page - 1) * limit;
+        const filter = { userId };
+        if (options.type) filter.type = options.type;
+        if (options.priority) filter.priority = options.priority;
+        const rawRead = options.isRead;
+        if (rawRead !== undefined && rawRead !== "") {
+            if (rawRead === true || rawRead === "true") filter.isRead = true;
+            else if (rawRead === false || rawRead === "false") filter.isRead = false;
+        }
+        const unreadFilter = {
+            userId,
+            isRead: false,
+            ...(options.type ? { type: options.type } : {}),
+            ...(options.priority ? { priority: options.priority } : {}),
+        };
+        const [notifications, total, unreadCount] = await Promise.all([
+            Notification.find(filter)
+                .sort({ createdAt: -1 })
+                .skip(skip)
+                .limit(limit)
+                .lean(),
+            Notification.countDocuments(filter),
+            Notification.countDocuments(unreadFilter),
+        ]);
+        return {
+            notifications,
+            pagination: {
+                page,
+                limit,
+                totalItems: total,
+                totalPages: Math.max(1, Math.ceil(total / limit)),
+            },
+            unreadCount,
+        };
+    }
+    async markAsRead(notificationId, userId) {
+        return Notification.findOneAndUpdate(
+            { _id: notificationId, userId },
+            { $set: { isRead: true } },
+            { new: true },
+        );
+    }
+    async markAllAsRead(userId) {
+        await Notification.updateMany(
+            { userId, isRead: false },
+            { $set: { isRead: true } },
+        );
+    }
+    async deleteNotification(notificationId, userId) {
+        return Notification.findOneAndDelete({
+            _id: notificationId,
+            userId,
+        });
+    }
 }
 
 export default new NotificationService();
