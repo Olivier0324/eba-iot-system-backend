@@ -13,8 +13,7 @@ const P = {
 };
 
 // Lazy-load ChartJSNodeCanvas so a missing/incompatible native `canvas`
-// binary (e.g. Windows build running on Vercel's Linux) doesn't crash the
-// entire serverless function at import time.
+// binary (e.g. Vercel serverless) doesn't crash at import time.
 let _chartCanvas = null;
 let _canvasAvailable = null;
 
@@ -34,10 +33,79 @@ const getChartCanvas = async () => {
         _canvasAvailable = true;
         return _chartCanvas;
     } catch (e) {
-        console.warn("⚠️  Chart generation unavailable (canvas not supported in this environment):", e.message);
+        console.warn("Chart generation: native canvas unavailable:", e.message);
         _canvasAvailable = false;
         return null;
     }
+};
+
+/** QuickChart cannot run JS tick callbacks; strip functions for JSON transport. */
+const cloneForQuickChart = (chartConfig) => {
+    try {
+        return JSON.parse(
+            JSON.stringify(chartConfig, (_, v) => (typeof v === "function" ? undefined : v))
+        );
+    } catch {
+        return null;
+    }
+};
+
+/**
+ * Render Chart.js config as PNG via QuickChart (works on Vercel where node-canvas is absent).
+ * Set DISABLE_QUICKCHART=1 to skip. Override base URL with QUICKCHART_URL if self-hosting.
+ */
+const fetchQuickChartPng = async (chartConfig, width = 860, height = 420) => {
+    if (process.env.DISABLE_QUICKCHART === "1") return null;
+
+    const base = (process.env.QUICKCHART_URL || "https://quickchart.io/chart").replace(/\/$/, "");
+    const chart = cloneForQuickChart(chartConfig);
+    if (!chart) return null;
+
+    const payload = {
+        chart,
+        width,
+        height,
+        format: "png",
+        version: "4",
+        devicePixelRatio: 2,
+        backgroundColor: "#ffffff",
+    };
+
+    const fetchInit = {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "image/png" },
+        body: JSON.stringify(payload),
+    };
+    if (typeof AbortSignal !== "undefined" && typeof AbortSignal.timeout === "function") {
+        fetchInit.signal = AbortSignal.timeout(28_000);
+    }
+
+    try {
+        const res = await fetch(base, fetchInit);
+        if (!res.ok) {
+            const t = await res.text();
+            console.warn("QuickChart HTTP", res.status, String(t).slice(0, 400));
+            return null;
+        }
+        const buf = Buffer.from(await res.arrayBuffer());
+        if (buf.length < 200) return null;
+        return buf;
+    } catch (e) {
+        console.warn("QuickChart request failed:", e.message);
+        return null;
+    }
+};
+
+const renderChartPng = async (chartConfig, width = 860, height = 420) => {
+    const canvas = await getChartCanvas();
+    if (canvas) {
+        try {
+            return await canvas.renderToBuffer(chartConfig);
+        } catch (e) {
+            console.warn("Canvas renderToBuffer failed:", e.message);
+        }
+    }
+    return await fetchQuickChartPng(chartConfig, width, height);
 };
 
 /** Build scales from dataset yAxisIDs so CO2-only reports still render a chart. */
@@ -120,13 +188,7 @@ const buildLineScales = (datasets) => {
     return scales;
 };
 
-// ─────────────────────────────────────────────────────────
-// LINE CHART  (temperature + humidity + soil + water + CO2)
-// ─────────────────────────────────────────────────────────
-export const generateChart = async (labels, datasets) => {
-    const canvas = await getChartCanvas();
-    if (!canvas) return null;
-
+const buildLineChartConfig = (labels, datasets) => {
     const lineScales = buildLineScales(datasets);
     lineScales.x = {
         grid: { color: P.grid, lineWidth: 0.5 },
@@ -140,7 +202,7 @@ export const generateChart = async (labels, datasets) => {
         },
     };
 
-    const config = {
+    return {
         type: "line",
         data: { labels, datasets },
         options: {
@@ -176,8 +238,14 @@ export const generateChart = async (labels, datasets) => {
             },
         },
     };
+};
 
-    return await canvas.renderToBuffer(config);
+// ─────────────────────────────────────────────────────────
+// LINE CHART  (temperature + humidity + soil + water + CO2)
+// ─────────────────────────────────────────────────────────
+export const generateChart = async (labels, datasets) => {
+    const config = buildLineChartConfig(labels, datasets);
+    return await renderChartPng(config, 860, 420);
 };
 
 // ─────────────────────────────────────────────────────────
@@ -274,12 +342,9 @@ export const generateFullChart = async (data, metricFilter) => {
 };
 
 // ─────────────────────────────────────────────────────────
-// PIE / DOUGHNUT CHART  (CO₂ distribution)
+// PIE / DOUGHNUT CHART  (CO2 distribution)
 // ─────────────────────────────────────────────────────────
 export const generatePieChart = async (data) => {
-    const canvas = await getChartCanvas();
-    if (!canvas) return null;
-
     const config = {
         type: "doughnut",
         data: {
@@ -328,5 +393,5 @@ export const generatePieChart = async (data) => {
         },
     };
 
-    return await canvas.renderToBuffer(config);
+    return await renderChartPng(config, 820, 400);
 };

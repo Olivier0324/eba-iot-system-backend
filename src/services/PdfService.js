@@ -169,6 +169,7 @@ export const generatePDF = async (rawData, options) => {
         textLight: "#718096",
         textMuted: "#A0AEC0",
         border: "#E2E8F0",
+        borderLight: "#EDF2F7",
         borderDark: "#CBD5E0",
         background: "#F7FAFC",
         cardBg: "#FFFFFF",
@@ -187,9 +188,9 @@ export const generatePDF = async (rawData, options) => {
         h1: { size: 18, font: "Helvetica-Bold" },
         h2: { size: 14, font: "Helvetica-Bold" },
         h3: { size: 11, font: "Helvetica-Bold" },
-        body: { size: 8, font: "Helvetica" },
-        small: { size: 7, font: "Helvetica" },
-        caption: { size: 6, font: "Helvetica-Oblique" },
+        body: { size: 9, font: "Helvetica" },
+        small: { size: 7.5, font: "Helvetica" },
+        caption: { size: 7, font: "Helvetica-Oblique" },
         mono: { size: 6, font: "Courier" },
     };
 
@@ -250,7 +251,7 @@ export const generatePDF = async (rawData, options) => {
         if (currentY + needed > PAGE_BOTTOM) newPage();
     };
 
-    const HEADING_H = 30;
+    const HEADING_H = 36;
     const FRESH_PAGE_THRESHOLD = 80;
 
     const sectionHeading = (label, icon = "", minContent = 100) => {
@@ -258,15 +259,20 @@ export const generatePDF = async (rawData, options) => {
         const overflow = currentY + HEADING_H + minContent > PAGE_BOTTOM;
         if (!fresh && overflow) newPage();
 
-        // Accent bar
-        doc.rect(MARGIN, currentY, 4, 22).fill(C.primary);
+        // Accent bar + title (extra vertical room reads better in PDF viewers)
+        doc.rect(MARGIN, currentY, 4, 26).fill(C.primary);
 
         doc.fillColor(C.primaryDark)
             .fontSize(T.h2.size)
             .font(T.h2.font)
-            .text(`${icon}  ${label}`.trim(), MARGIN + 12, currentY + 3);
+            .text(`${icon}  ${label}`.trim(), MARGIN + 14, currentY + 5);
 
-        currentY += HEADING_H;
+        currentY += 28;
+        doc.strokeColor(C.borderLight).lineWidth(0.75)
+            .moveTo(MARGIN + 10, currentY)
+            .lineTo(MARGIN + CONTENT_W, currentY)
+            .stroke();
+        currentY += 8;
         hasContentOnCurrentPage = true;
     };
 
@@ -393,7 +399,7 @@ export const generatePDF = async (rawData, options) => {
         return true;
     }).filter((m) => m.stats.count > 0);
 
-    const KPI_H = 52;
+    const KPI_H = 56;
     const KPI_W = (CONTENT_W - 10) / 2;
     const KPI_GAP = 10;
 
@@ -413,8 +419,8 @@ export const generatePDF = async (rawData, options) => {
         // Left colour strip
         doc.rect(x, currentY, 5, KPI_H).fill(m.color);
 
-        doc.fillColor(m.color).fontSize(8).font("Helvetica-Bold")
-            .text(m.name.toUpperCase(), x + 14, currentY + 9, { width: KPI_W - 20 });
+        doc.fillColor(m.color).fontSize(8.5).font("Helvetica-Bold")
+            .text(m.name.toUpperCase(), x + 14, currentY + 10, { width: KPI_W - 20 });
 
         // One line for value + unit avoids PDFKit widthOfString/font mismatch (was overlapping the decimal).
         let valueLine;
@@ -423,11 +429,11 @@ export const generatePDF = async (rawData, options) => {
         else valueLine = `${m.stats.avg} ${m.unit}`;
 
         doc.fillColor(C.text).fontSize(16).font("Helvetica-Bold")
-            .text(valueLine, x + 14, currentY + 20, { width: KPI_W - 20, ellipsis: true });
+            .text(valueLine, x + 14, currentY + 22, { width: KPI_W - 20, ellipsis: true });
 
         // ASCII-only: standard PDF fonts often substitute arrows and middle dots with wrong glyphs.
-        doc.fillColor(C.textMuted).fontSize(7.5).font("Helvetica")
-            .text(`Min ${m.stats.min}  /  Max ${m.stats.max}`, x + 14, currentY + 38, { width: KPI_W - 20 });
+        doc.fillColor(C.textMuted).fontSize(8).font("Helvetica")
+            .text(`Min ${m.stats.min}  /  Max ${m.stats.max}`, x + 14, currentY + 40, { width: KPI_W - 20 });
 
         col++;
         if (col === 2) {
@@ -443,13 +449,10 @@ export const generatePDF = async (rawData, options) => {
     if (col !== 0) currentY += KPI_H + KPI_GAP;
     currentY += 6;
 
-    // ── Data overview pill bar ─────────────────────────────────
-    ensureSpace(38);
-    doc.roundedRect(MARGIN, currentY, CONTENT_W, 30, 6).fill(C.stripeBg).stroke(C.border);
-    doc.fillColor(C.primaryDark).fontSize(8).font("Helvetica-Bold")
-        .text(`Records: ${data.length}`, MARGIN + 12, currentY + 10);
-    doc.fillColor(C.textLight).fontSize(8).font("Helvetica")
-        .text(`|  Date Range: ${dateRange}`, MARGIN + 90, currentY + 10);
+    // ── Data overview bar (stacked lines so long ranges are not clipped on one row)
+    const PILL_H = 44;
+    ensureSpace(PILL_H + 10);
+    doc.roundedRect(MARGIN, currentY, CONTENT_W, PILL_H, 8).fill(C.stripeBg).stroke(C.border);
 
     const paramLabel = (() => {
         if (!metric || metric === "all") return "Temperature | Humidity | CO2 | Soil | Water";
@@ -465,10 +468,15 @@ export const generatePDF = async (rawData, options) => {
         };
         return map[metric] || metric.replace("_ppm", "").replace("_percent", "");
     })();
-    doc.fillColor(C.textLight).fontSize(8).font("Helvetica")
-        .text(`|  Params: ${paramLabel}`, MARGIN + 280, currentY + 10, { width: CONTENT_W - 290, ellipsis: true });
 
-    currentY += 40;
+    doc.fillColor(C.primaryDark).fontSize(8.5).font("Helvetica-Bold")
+        .text(`Records: ${data.length}`, MARGIN + 14, currentY + 9);
+    doc.fillColor(C.textLight).fontSize(8).font("Helvetica")
+        .text(`Date range: ${dateRange}`, MARGIN + 14, currentY + 21, { width: CONTENT_W - 28, ellipsis: true });
+    doc.fillColor(C.textLight).fontSize(8).font("Helvetica")
+        .text(`Parameters: ${paramLabel}`, MARGIN + 14, currentY + 31, { width: CONTENT_W - 28, ellipsis: true });
+
+    currentY += PILL_H + 12;
     hasContentOnCurrentPage = true;
 
     // ─────────────────────────────────────────────────────────
@@ -513,15 +521,15 @@ export const generatePDF = async (rawData, options) => {
         xCur += c.w;
     });
 
-    const ROW_H = 18;
-    const HEAD_H = 24;
+    const ROW_H = 20;
+    const HEAD_H = 26;
     const PAD = 4;
 
     const drawTableHeader = () => {
         doc.rect(MARGIN, currentY, CONTENT_W, HEAD_H).fill(C.primaryDark);
         visCols.forEach((col) => {
             doc.fillColor(C.white).fontSize(8).font("Helvetica-Bold")
-                .text(col.label, col.x + PAD, currentY + 7,
+                .text(col.label, col.x + PAD, currentY + 8,
                     { width: col.w - PAD * 2, ellipsis: true });
         });
         currentY += HEAD_H;
@@ -575,8 +583,8 @@ export const generatePDF = async (rawData, options) => {
                     display = (val ?? "--").toString();
             }
 
-            doc.fillColor(color).fontSize(T.body.size - 1).font(T.body.font)
-                .text(display, col.x + PAD, currentY + 4,
+            doc.fillColor(color).fontSize(T.body.size - 0.5).font(T.body.font)
+                .text(display, col.x + PAD, currentY + 5,
                     { width: col.w - PAD * 2, ellipsis: true });
         });
 
@@ -633,23 +641,37 @@ export const generatePDF = async (rawData, options) => {
         currentY += CARD_H + 10;
         hasContentOnCurrentPage = true;
     }
-    const CHART_H = 260;
-    const CHART_BOX = CHART_H + 35;
+    const CHART_H = 272;
+    const CHART_BOX = CHART_H + 38;
 
     sectionHeading("4. Data Visualizations", "", CHART_BOX);
     const chartImage = await generateFullChart(data, metric);
     if (chartImage) {
         ensureSpace(CHART_BOX + 10);
-        doc.roundedRect(MARGIN, currentY, CONTENT_W, CHART_H, 6)
-            .fill(C.cardBg).stroke(C.border);
-        doc.image(chartImage, MARGIN + 10, currentY + 10, { fit: [CONTENT_W - 20, CHART_H - 20] });
-        currentY += CHART_H + 6;
+        doc.roundedRect(MARGIN, currentY, CONTENT_W, CHART_H, 8)
+            .fill(C.cardBg).stroke(C.borderDark);
+        doc.image(chartImage, MARGIN + 12, currentY + 12, { fit: [CONTENT_W - 24, CHART_H - 24] });
+        currentY += CHART_H + 8;
         doc.fillColor(C.textLight).fontSize(T.caption.size).font(T.caption.font)
             .text(
                 "Figure 1: Environmental parameter trends over time (percent on left where applicable; temperature and CO2 on right scales).",
                 MARGIN, currentY, { align: "center", width: CONTENT_W }
             );
-        currentY += 22;
+        currentY += 24;
+        hasContentOnCurrentPage = true;
+    } else {
+        ensureSpace(88);
+        doc.roundedRect(MARGIN, currentY, CONTENT_W, 76, 8)
+            .fill("#F8FAFC").stroke(C.border);
+        doc.fillColor(C.textMuted).fontSize(9).font("Helvetica")
+            .text(
+                "Trend chart could not be rendered on this host (no chart engine). " +
+                "Charts are generated via QuickChart when native canvas is unavailable; ensure outbound HTTPS is allowed, " +
+                "or run PDF export on a server with node-canvas installed.",
+                MARGIN + 16, currentY + 14,
+                { width: CONTENT_W - 32, align: "center" }
+            );
+        currentY += 88;
         hasContentOnCurrentPage = true;
     }
 
@@ -673,14 +695,28 @@ export const generatePDF = async (rawData, options) => {
             const pieImage = await generatePieChart(pieData);
             if (pieImage) {
                 ensureSpace(CHART_BOX + 10);
-                doc.roundedRect(MARGIN, currentY, CONTENT_W, CHART_H, 6)
-                    .fill(C.cardBg).stroke(C.border);
-                doc.image(pieImage, MARGIN + 10, currentY + 10, { fit: [CONTENT_W - 20, CHART_H - 20] });
-                currentY += CHART_H + 6;
+                doc.roundedRect(MARGIN, currentY, CONTENT_W, CHART_H, 8)
+                    .fill(C.cardBg).stroke(C.borderDark);
+                doc.image(pieImage, MARGIN + 12, currentY + 12, { fit: [CONTENT_W - 24, CHART_H - 24] });
+                currentY += CHART_H + 8;
                 doc.fillColor(C.textLight).fontSize(T.caption.size).font(T.caption.font)
                     .text("Figure 2: CO2 level distribution across all recorded readings",
                         MARGIN, currentY, { align: "center", width: CONTENT_W });
-                currentY += 22;
+                currentY += 24;
+                hasContentOnCurrentPage = true;
+            } else {
+                ensureSpace(72);
+                doc.roundedRect(MARGIN, currentY, CONTENT_W, 64, 8)
+                    .fill("#F8FAFC").stroke(C.border);
+                doc.fillColor(C.textMuted).fontSize(9).font("Helvetica")
+                    .text(
+                        "CO2 distribution chart could not be generated (same requirements as Figure 1). " +
+                        `Readings by band: ${pieData.map((p) => `${p.value}`).join(" / ")} ` +
+                        `(good / moderate / elevated / high).`,
+                        MARGIN + 14, currentY + 12,
+                        { width: CONTENT_W - 28, align: "left" }
+                    );
+                currentY += 76;
                 hasContentOnCurrentPage = true;
             }
         }
