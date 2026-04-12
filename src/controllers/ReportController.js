@@ -9,13 +9,11 @@ import {
     isCloudinaryReportStorageEnabled,
     uploadReportPdfToCloudinary,
     deleteReportPdfFromCloudinary,
-    fetchReportPdfBuffer,
+    fetchReportPdfFromCloudinary,
 } from "../services/reportStorage.js";
 
 const usesCloudinary = (report) =>
-    report.storage === "cloudinary" &&
-    Boolean(report.cloudinaryPublicId) &&
-    Boolean(report.cloudinarySecureUrl);
+    report.storage === "cloudinary" && Boolean(report.cloudinaryPublicId);
 
 const usesLocalFile = (report) =>
     Boolean(report.filePath) && (!report.storage || report.storage === "local");
@@ -118,7 +116,7 @@ export const downloadReport = async (req, res) => {
 
         if (usesCloudinary(report)) {
             try {
-                const buf = await fetchReportPdfBuffer(report.cloudinarySecureUrl);
+                const buf = await fetchReportPdfFromCloudinary(report.cloudinaryPublicId);
                 report.downloadCount = (report.downloadCount || 0) + 1;
                 await report.save();
 
@@ -185,7 +183,7 @@ export const viewReport = async (req, res) => {
 
         if (usesCloudinary(report)) {
             try {
-                const buf = await fetchReportPdfBuffer(report.cloudinarySecureUrl);
+                const buf = await fetchReportPdfFromCloudinary(report.cloudinaryPublicId);
                 res.setHeader("Content-Type", "application/pdf");
                 res.setHeader("Content-Disposition", `inline; filename="${report.originalFilename}"`);
                 res.setHeader("Content-Length", buf.length);

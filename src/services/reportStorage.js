@@ -43,17 +43,43 @@ export async function deleteReportPdfFromCloudinary(publicId) {
     }
 }
 
-/** Fetch PDF bytes from a stored Cloudinary HTTPS URL (public raw delivery). */
-export async function fetchReportPdfBuffer(secureUrl) {
-    const res = await fetch(secureUrl, {
-        headers: { Accept: "application/pdf" },
+/**
+ * Build a time-limited signed HTTPS URL for a raw PDF.
+ * Unsigned `secure_url` often returns 401/404 when delivery is restricted; always sign for server fetches.
+ */
+export function getSignedRawReportUrl(publicId) {
+    if (!publicId || typeof publicId !== "string") {
+        throw new Error("Missing Cloudinary public_id for report");
+    }
+    return cloudinary.url(publicId, {
+        resource_type: "raw",
+        secure: true,
+        sign_url: true,
+    });
+}
+
+/** Fetch PDF bytes using public_id (signed URL under the hood). */
+export async function fetchReportPdfFromCloudinary(publicId) {
+    const url = getSignedRawReportUrl(publicId);
+    const res = await fetch(url, {
+        headers: {
+            Accept: "application/pdf,*/*",
+            "User-Agent": "EBA-IoT-Backend/1.0",
+        },
+        redirect: "follow",
         signal:
             typeof AbortSignal !== "undefined" && typeof AbortSignal.timeout === "function"
                 ? AbortSignal.timeout(45_000)
                 : undefined,
     });
     if (!res.ok) {
-        throw new Error(`Failed to fetch report from storage (${res.status})`);
+        const ct = res.headers.get("content-type") || "";
+        const snippet = (await res.text()).slice(0, 200);
+        throw new Error(`Cloudinary fetch HTTP ${res.status} (${ct}) ${snippet}`);
     }
-    return Buffer.from(await res.arrayBuffer());
+    const buf = Buffer.from(await res.arrayBuffer());
+    if (buf.length > 4 && buf.subarray(0, 4).toString() !== "%PDF") {
+        console.warn("Cloudinary response may not be a PDF (missing %PDF header), length:", buf.length);
+    }
+    return buf;
 }
