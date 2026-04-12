@@ -1,5 +1,6 @@
 // models/Report.js
-import mongoose from 'mongoose';
+import mongoose from "mongoose";
+import path from "path";
 
 const ReportSchema = new mongoose.Schema({
     filename: {
@@ -13,15 +14,21 @@ const ReportSchema = new mongoose.Schema({
     reportType: {
         type: String,
         required: true,
-        default: 'daily',
-        enum: ['daily', 'weekly', 'monthly', 'custom']
+        default: "daily",
+        enum: ["daily", "weekly", "monthly", "custom"]
     },
+    /** `local`: relative path from project root. `cloudinary`: file lives in Cloudinary; use cloudinary* fields. */
+    storage: {
+        type: String,
+        enum: ["local", "cloudinary"],
+        default: "local",
+    },
+    cloudinaryPublicId: { type: String },
+    cloudinarySecureUrl: { type: String },
     filePath: {
         type: String,
-        required: true,
-        // Store relative path from project root
+        // Relative path for local disk; omitted when storage is cloudinary
         get: function (value) {
-            // When retrieving, ensure path is correct
             return value;
         }
     },
@@ -41,8 +48,8 @@ const ReportSchema = new mongoose.Schema({
     timestamps: true
 });
 
-// Virtual to get absolute path when needed
-ReportSchema.virtual('absolutePath').get(function () {
+ReportSchema.virtual("absolutePath").get(function () {
+    if (!this.filePath) return null;
     return path.join(process.cwd(), this.filePath);
 });
 
