@@ -24,6 +24,9 @@ const ReportSchema = new mongoose.Schema({
         default: "local",
     },
     cloudinaryPublicId: { type: String },
+    /** HTTPS link returned by Cloudinary at upload (canonical; use for clients / retries). */
+    pdfFileUrl: { type: String },
+    /** Kept for backwards compatibility; new uploads mirror `pdfFileUrl`. */
     cloudinarySecureUrl: { type: String },
     filePath: {
         type: String,

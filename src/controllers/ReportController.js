@@ -9,11 +9,16 @@ import {
     isCloudinaryReportStorageEnabled,
     uploadReportPdfToCloudinary,
     deleteReportPdfFromCloudinary,
-    fetchReportPdfFromCloudinary,
+    fetchReportPdfBuffer,
 } from "../services/reportStorage.js";
 
 const usesCloudinary = (report) =>
-    report.storage === "cloudinary" && Boolean(report.cloudinaryPublicId);
+    report.storage === "cloudinary" &&
+    Boolean(
+        report.cloudinaryPublicId ||
+        report.pdfFileUrl ||
+        report.cloudinarySecureUrl
+    );
 
 const usesLocalFile = (report) =>
     Boolean(report.filePath) && (!report.storage || report.storage === "local");
@@ -40,6 +45,7 @@ export const createReport = async (req, res) => {
         let relativePath = path.relative(process.cwd(), filePath);
         let cloudinaryPublicId;
         let cloudinarySecureUrl;
+        let pdfFileUrl;
 
         if (isCloudinaryReportStorageEnabled()) {
             try {
@@ -48,6 +54,7 @@ export const createReport = async (req, res) => {
                 storage = "cloudinary";
                 cloudinaryPublicId = uploaded.publicId;
                 cloudinarySecureUrl = uploaded.secureUrl;
+                pdfFileUrl = uploaded.pdfFileUrl;
                 fileSize = uploaded.bytes || fileSize;
                 relativePath = undefined;
             } catch (uploadErr) {
@@ -63,6 +70,7 @@ export const createReport = async (req, res) => {
             ...(storage === "cloudinary" && {
                 cloudinaryPublicId,
                 cloudinarySecureUrl,
+                pdfFileUrl,
             }),
             ...(relativePath != null && relativePath !== "" && { filePath: relativePath }),
             fileSize,
@@ -88,6 +96,8 @@ export const createReport = async (req, res) => {
                 filename: report.originalFilename,
                 size: report.fileSize,
                 storage: report.storage,
+                /** Direct Cloudinary HTTPS link (also persisted as `pdfFileUrl` in DB). */
+                fileUrl: report.pdfFileUrl || report.cloudinarySecureUrl || null,
                 downloadUrl: `${baseUrl}/api/v1/reports/download/${report._id}`,
                 viewUrl: `${baseUrl}/api/v1/reports/view/${report._id}`,
                 createdAt: report.createdAt,
@@ -116,7 +126,7 @@ export const downloadReport = async (req, res) => {
 
         if (usesCloudinary(report)) {
             try {
-                const buf = await fetchReportPdfFromCloudinary(report.cloudinaryPublicId);
+                const buf = await fetchReportPdfBuffer(report);
                 report.downloadCount = (report.downloadCount || 0) + 1;
                 await report.save();
 
@@ -183,7 +193,7 @@ export const viewReport = async (req, res) => {
 
         if (usesCloudinary(report)) {
             try {
-                const buf = await fetchReportPdfFromCloudinary(report.cloudinaryPublicId);
+                const buf = await fetchReportPdfBuffer(report);
                 res.setHeader("Content-Type", "application/pdf");
                 res.setHeader("Content-Disposition", `inline; filename="${report.originalFilename}"`);
                 res.setHeader("Content-Length", buf.length);
@@ -255,6 +265,7 @@ export const getAllReports = async (req, res) => {
             success: true,
             reports: reports.map((report) => ({
                 ...report.toObject(),
+                fileUrl: report.pdfFileUrl || report.cloudinarySecureUrl || null,
                 downloadUrl: `${baseUrl}/api/v1/reports/download/${report._id}`,
                 viewUrl: `${baseUrl}/api/v1/reports/view/${report._id}`,
             })),
@@ -292,6 +303,7 @@ export const getReportById = async (req, res) => {
             success: true,
             report: {
                 ...report.toObject(),
+                fileUrl: report.pdfFileUrl || report.cloudinarySecureUrl || null,
                 downloadUrl: `${baseUrl}/api/v1/reports/download/${report._id}`,
                 viewUrl: `${baseUrl}/api/v1/reports/view/${report._id}`,
             },
