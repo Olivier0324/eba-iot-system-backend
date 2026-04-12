@@ -4,7 +4,6 @@ import mqtt from 'mqtt';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import http from 'http';
-import serverless from 'serverless-http';
 import path from 'path';
 import mongoose from 'mongoose';
 import {
@@ -268,24 +267,26 @@ app.use((err, req, res, next) => {
 // ==================== Start Server Only After DB Connection ====================
 const startServer = async () => {
     try {
+        // Vercel (@vercel/node) invokes the default export per request; DB connects there.
+        // Avoid MQTT on Vercel (many concurrent lambdas would open duplicate broker connections).
+        if (process.env.VERCEL) {
+            console.log("✅ Vercel serverless: use default export handler; MQTT skipped");
+            return;
+        }
+
         await connectDB();
-        console.log('✅ Database connected, starting server...');
+        console.log("✅ Database connected, starting server...");
 
         initMQTT();
 
-        // Vercel sets VERCEL when running as serverless — do not call server.listen (export default app handles HTTP).
-        if (!process.env.VERCEL) {
-            const PORT = process.env.PORT || 3000;
-            server.listen(PORT, () => {
-                console.log(`🚀 Server running on port ${PORT}`);
-                console.log(`📚 API Documentation: http://localhost:${PORT}/api-docs`);
-                console.log(`💚 Health Check: http://localhost:${PORT}/health`);
-            });
-        } else {
-            console.log('✅ Running on Vercel (serverless); HTTP handled without server.listen');
-        }
+        const PORT = process.env.PORT || 3000;
+        server.listen(PORT, () => {
+            console.log(`🚀 Server running on port ${PORT}`);
+            console.log(`📚 API Documentation: http://localhost:${PORT}/api-docs`);
+            console.log(`💚 Health Check: http://localhost:${PORT}/health`);
+        });
     } catch (error) {
-        console.error('❌ Failed to start server:', error);
+        console.error("❌ Failed to start server:", error);
         process.exit(1);
     }
 };
@@ -329,14 +330,31 @@ process.on('unhandledRejection', (reason, promise) => {
 
 startServer();
 
-// Vercel invokes `export default` as a serverless function. Exporting only `app` skips the
-// `http.Server` that Socket.IO is bound to, so `/socket.io/*` fell through to Express 404.
-// `serverless-http` forwards requests to the real `server`, enabling Engine.IO long-polling.
-// Note: Vercel still limits long-lived WebSockets; prefer polling or a dedicated realtime host for production scale.
-const vercelHandler = serverless(server, {
-    binary: ['application/pdf', 'application/octet-stream', 'image/png', 'image/jpeg', 'image/gif', 'image/webp'],
-});
+/**
+ * Default export is the HTTP entry for @vercel/node. Vercel passes Node (req, res).
+ * `serverless-http` used the AWS Lambda adapter (API Gateway "event" shape), which does not
+ * match Vercel's request object and caused FUNCTION_INVOCATION_FAILED — forward (req, res)
+ * into our real `http.Server` instead (Express + Socket.IO).
+ *
+ * Locally, `node src/index.js` never calls this; `startServer()` uses `server.listen` instead.
+ */
+async function forwardRequestToServer(req, res) {
+    try {
+        await connectDB();
+    } catch (err) {
+        console.error("Database unavailable:", err.message);
+        if (!res.headersSent) {
+            res.status(503).json({
+                success: false,
+                message: "Database unavailable",
+                ...(process.env.NODE_ENV === "development" && { detail: err.message }),
+            });
+        }
+        return;
+    }
+    server.emit("request", req, res);
+}
 
-export default process.env.VERCEL ? vercelHandler : app;
+export default forwardRequestToServer;
 export { mqttClient, pendingRequests, latestSensorData, latestDeviceStatus };
 export { getIo } from './services/SocketService.js';
