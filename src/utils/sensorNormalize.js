@@ -12,6 +12,15 @@ export function coerceNumber(v) {
     return Number.isFinite(n) ? n : null;
 }
 
+/** Canonical numeric fields that count as a real sensor reading (0 is valid). */
+const SENSOR_NUMERIC_KEYS = [
+    "temperature",
+    "humidity",
+    "co2_ppm",
+    "soil_moisture_percent",
+    "water_level_percent",
+];
+
 export function normalizeSensorRecord(raw) {
     const o = raw && typeof raw.toObject === "function" ? raw.toObject() : { ...raw };
     return {
@@ -28,6 +37,39 @@ export function normalizeSensorRecord(raw) {
         interval_ms: coerceNumber(o.interval_ms),
         timestamp: o.timestamp ? new Date(o.timestamp) : null,
     };
+}
+
+/** True if at least one environmental reading is a finite number (excludes heartbeat-only payloads). */
+export function hasReadableSensorData(normalized) {
+    return SENSOR_NUMERIC_KEYS.some((k) => {
+        const v = normalized[k];
+        return v != null && Number.isFinite(v);
+    });
+}
+
+/**
+ * Normalizes `raw`, then returns a plain object for `new SensorData(doc)` or `null` if nothing should be stored.
+ * Drops non-finite values so we do not persist empty fields or string garbage from devices.
+ */
+export function buildSensorPersistenceDoc(raw) {
+    const n = normalizeSensorRecord(raw);
+    if (!hasReadableSensorData(n)) return null;
+
+    const doc = {};
+    if (n.device_id != null && String(n.device_id).trim() !== "") {
+        doc.device_id = String(n.device_id).trim();
+    }
+    if (n.interval_ms != null && Number.isFinite(n.interval_ms)) {
+        doc.interval_ms = n.interval_ms;
+    }
+    if (n.timestamp instanceof Date && !Number.isNaN(n.timestamp.getTime())) {
+        doc.timestamp = n.timestamp;
+    }
+    for (const k of SENSOR_NUMERIC_KEYS) {
+        const v = n[k];
+        if (v != null && Number.isFinite(v)) doc[k] = v;
+    }
+    return doc;
 }
 
 /** Drop consecutive identical readings (duplicate MQTT / DB inserts). */

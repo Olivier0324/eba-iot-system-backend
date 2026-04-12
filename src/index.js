@@ -28,6 +28,7 @@ import contactRoutes from './routes/contactRoutes.js';
 import notificationRoutes from './routes/NotificationRoutes.js';
 import { connectDB } from './config/database.js';
 import AlertService from './services/AlertService.js';
+import { buildSensorPersistenceDoc } from './utils/sensorNormalize.js';
 
 dotenv.config();
 
@@ -122,11 +123,19 @@ const initMQTT = () => {
             console.log(`📨 Message on ${topic.split('/').pop()}:`, payload);
 
             if (topic === mqttConfig.topic) {
-                const sensorData = new SensorData(payload);
+                const doc = buildSensorPersistenceDoc(payload);
+                if (!doc) {
+                    console.warn("Skipping MQTT sensor save: no valid numeric readings (heartbeat or empty payload)", {
+                        device_id: payload?.device_id,
+                    });
+                    return;
+                }
+
+                const sensorData = new SensorData(doc);
                 await sensorData.save();
                 const alerts = await AlertService.checkAndCreateAlerts(sensorData);
 
-                const dataToSend = { ...payload, timestamp: sensorData.createdAt };
+                const dataToSend = { ...doc, timestamp: sensorData.createdAt };
                 latestSensorData = dataToSend;
 
                 emitSensorData(dataToSend);
