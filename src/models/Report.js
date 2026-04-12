@@ -17,11 +17,20 @@ const ReportSchema = new mongoose.Schema({
         default: "daily",
         enum: ["daily", "weekly", "monthly", "custom"]
     },
-    /** `local`: relative path from project root. `cloudinary`: file lives in Cloudinary; use cloudinary* fields. */
+    /**
+     * `local`: relative path on disk (`filePath`).
+     * `cloudinary`: remote asset; use `cloudinary*` / `pdfFileUrl`.
+     * `mongodb`: PDF bytes in `pdfData` (demo / serverless-friendly; BSON doc max ~16MB total).
+     */
     storage: {
         type: String,
-        enum: ["local", "cloudinary"],
+        enum: ["local", "cloudinary", "mongodb"],
         default: "local",
+    },
+    /** Raw PDF bytes when `storage` is `mongodb`. Excluded from queries by default (see `+pdfData` in controller). */
+    pdfData: {
+        type: Buffer,
+        select: false,
     },
     cloudinaryPublicId: { type: String },
     /** HTTPS link returned by Cloudinary at upload (canonical; use for clients / retries). */
@@ -32,7 +41,7 @@ const ReportSchema = new mongoose.Schema({
     cloudinaryVersion: { type: Number },
     filePath: {
         type: String,
-        // Relative path for local disk; omitted when storage is cloudinary
+        // Relative path for local disk; omitted when storage is cloudinary or mongodb
         get: function (value) {
             return value;
         }

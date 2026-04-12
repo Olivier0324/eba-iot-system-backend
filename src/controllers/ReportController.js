@@ -5,6 +5,7 @@ import { buildQuery } from "../utils/buildQuery.js";
 import { Report } from "../models/Report.js";
 import fs from "fs";
 import path from "path";
+import { Readable } from "stream";
 import {
     isCloudinaryReportStorageEnabled,
     uploadReportPdfToCloudinary,
@@ -12,6 +13,9 @@ import {
     getCloudinaryViewRedirectUrl,
     getCloudinaryDownloadRedirectUrl,
 } from "../services/reportStorage.js";
+
+/** BSON document limit is 16MB; keep headroom for other report fields. */
+const MAX_MONGODB_PDF_BYTES = 15 * 1024 * 1024;
 
 const usesCloudinary = (report) =>
     report.storage === "cloudinary" &&
@@ -24,7 +28,12 @@ const usesCloudinary = (report) =>
 const usesLocalFile = (report) =>
     Boolean(report.filePath) && (!report.storage || report.storage === "local");
 
-// Generate and store PDF (Cloudinary when configured, else local disk)
+const usesMongoPdf = (report) => report.storage === "mongodb";
+
+const reportStorageUsesMongo = () =>
+    String(process.env.REPORT_STORAGE || "").toLowerCase() === "mongodb";
+
+// Generate and store PDF: REPORT_STORAGE=mongodb → MongoDB; else Cloudinary if configured; else local disk
 export const createReport = async (req, res) => {
     try {
         const { type: reportType = "daily" } = req.query;
@@ -48,8 +57,30 @@ export const createReport = async (req, res) => {
         let cloudinarySecureUrl;
         let pdfFileUrl;
         let cloudinaryVersion;
+        let pdfData;
 
-        if (isCloudinaryReportStorageEnabled()) {
+        if (reportStorageUsesMongo()) {
+            if (fileSize > MAX_MONGODB_PDF_BYTES) {
+                try {
+                    fs.unlinkSync(filePath);
+                } catch {
+                    /* ignore */
+                }
+                return res.status(413).json({
+                    success: false,
+                    message: `Report PDF exceeds MongoDB demo limit (${MAX_MONGODB_PDF_BYTES / (1024 * 1024)} MB per document). Reduce date range or use Cloudinary/local storage.`,
+                });
+            }
+            pdfData = fs.readFileSync(filePath);
+            try {
+                fs.unlinkSync(filePath);
+            } catch {
+                /* ignore */
+            }
+            storage = "mongodb";
+            relativePath = undefined;
+            fileSize = pdfData.length;
+        } else if (isCloudinaryReportStorageEnabled()) {
             try {
                 const uploaded = await uploadReportPdfToCloudinary(filePath);
                 fs.unlinkSync(filePath);
@@ -76,6 +107,7 @@ export const createReport = async (req, res) => {
                 pdfFileUrl,
                 ...(cloudinaryVersion != null && { cloudinaryVersion }),
             }),
+            ...(storage === "mongodb" && pdfData && { pdfData }),
             ...(relativePath != null && relativePath !== "" && { filePath: relativePath }),
             fileSize,
             metadata: {
@@ -105,7 +137,7 @@ export const createReport = async (req, res) => {
                  * Use this link in the browser. Unsigned Cloudinary URLs often return 401; this hits our API,
                  * which redirects to a signed Cloudinary delivery URL.
                  */
-                fileUrl: storage === "cloudinary" ? viewUrl : null,
+                fileUrl: storage === "cloudinary" || storage === "mongodb" ? viewUrl : null,
                 downloadUrl: `${baseUrl}/api/v1/reports/download/${report._id}`,
                 viewUrl,
                 createdAt: report.createdAt,
@@ -145,6 +177,30 @@ export const downloadReport = async (req, res) => {
                     detail: process.env.NODE_ENV === "development" ? e.message : undefined,
                 });
             }
+        }
+
+        if (usesMongoPdf(report)) {
+            const withBlob = await Report.findById(id).select("+pdfData");
+            const buf = withBlob?.pdfData;
+            if (!buf?.length) {
+                return res.status(404).json({
+                    success: false,
+                    message: "Report PDF not found in database",
+                });
+            }
+            report.downloadCount = (report.downloadCount || 0) + 1;
+            await report.save();
+            res.setHeader("Content-Type", "application/pdf");
+            res.setHeader("Content-Disposition", `attachment; filename="${report.originalFilename}"`);
+            res.setHeader("Content-Length", buf.length);
+            const stream = Readable.from(buf);
+            stream.pipe(res);
+            stream.on("error", (err) => {
+                if (!res.headersSent) {
+                    res.status(500).json({ error: err.message || "Download failed" });
+                }
+            });
+            return;
         }
 
         if (!usesLocalFile(report)) {
@@ -208,6 +264,28 @@ export const viewReport = async (req, res) => {
             }
         }
 
+        if (usesMongoPdf(report)) {
+            const withBlob = await Report.findById(id).select("+pdfData");
+            const buf = withBlob?.pdfData;
+            if (!buf?.length) {
+                return res.status(404).json({
+                    success: false,
+                    message: "Report PDF not found in database",
+                });
+            }
+            res.setHeader("Content-Type", "application/pdf");
+            res.setHeader("Content-Disposition", `inline; filename="${report.originalFilename}"`);
+            res.setHeader("Content-Length", buf.length);
+            const stream = Readable.from(buf);
+            stream.pipe(res);
+            stream.on("error", (err) => {
+                if (!res.headersSent) {
+                    res.status(500).json({ error: err.message || "Failed to stream file" });
+                }
+            });
+            return;
+        }
+
         if (!usesLocalFile(report)) {
             return res.status(404).json({
                 success: false,
@@ -268,7 +346,10 @@ export const getAllReports = async (req, res) => {
                 const viewUrl = `${baseUrl}/api/v1/reports/view/${report._id}`;
                 return {
                     ...report.toObject(),
-                    fileUrl: report.storage === "cloudinary" ? viewUrl : report.pdfFileUrl || report.cloudinarySecureUrl || null,
+                    fileUrl:
+                        report.storage === "cloudinary" || report.storage === "mongodb"
+                            ? viewUrl
+                            : report.pdfFileUrl || report.cloudinarySecureUrl || null,
                     downloadUrl: `${baseUrl}/api/v1/reports/download/${report._id}`,
                     viewUrl,
                 };
@@ -308,7 +389,10 @@ export const getReportById = async (req, res) => {
             success: true,
             report: {
                 ...report.toObject(),
-                fileUrl: report.storage === "cloudinary" ? viewUrl : report.pdfFileUrl || report.cloudinarySecureUrl || null,
+                fileUrl:
+                    report.storage === "cloudinary" || report.storage === "mongodb"
+                        ? viewUrl
+                        : report.pdfFileUrl || report.cloudinarySecureUrl || null,
                 downloadUrl: `${baseUrl}/api/v1/reports/download/${report._id}`,
                 viewUrl,
             },
@@ -353,6 +437,8 @@ export const deleteReport = async (req, res) => {
                     });
                 }
             }
+        } else if (usesMongoPdf(report)) {
+            fileDeleted = true;
         }
 
         await Report.findByIdAndDelete(id);

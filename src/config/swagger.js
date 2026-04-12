@@ -142,6 +142,11 @@ const options = {
                         filename: { type: 'string' },
                         originalFilename: { type: 'string' },
                         reportType: { type: 'string', enum: ['daily', 'weekly', 'monthly'] },
+                        storage: {
+                            type: 'string',
+                            enum: ['local', 'cloudinary', 'mongodb'],
+                            description: 'mongodb = PDF stored in DB when REPORT_STORAGE=mongodb',
+                        },
                         fileSize: { type: 'integer' },
                         downloadUrl: { type: 'string' },
                         createdAt: { type: 'string', format: 'date-time' }
