@@ -28,6 +28,8 @@ const ReportSchema = new mongoose.Schema({
     pdfFileUrl: { type: String },
     /** Kept for backwards compatibility; new uploads mirror `pdfFileUrl`. */
     cloudinarySecureUrl: { type: String },
+    /** Asset version from Cloudinary upload response; improves signed delivery URL accuracy. */
+    cloudinaryVersion: { type: Number },
     filePath: {
         type: String,
         // Relative path for local disk; omitted when storage is cloudinary

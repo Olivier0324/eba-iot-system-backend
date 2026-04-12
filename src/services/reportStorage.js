@@ -11,6 +11,22 @@ export function isCloudinaryReportStorageEnabled() {
 
 const toHttps = (u) => (typeof u === "string" ? u.replace(/^http:\/\//i, "https://") : u);
 
+/** Recover public_id from an unsigned delivery URL when older DB rows omitted `cloudinaryPublicId`. */
+export function inferRawPublicIdFromCloudinaryUrl(url) {
+    if (!url || typeof url !== "string") return null;
+    const s = toHttps(url).trim();
+    const m = s.match(/\/raw\/upload\/v\d+\/(.+?)(?:\?|$)/i) || s.match(/\/raw\/upload\/(.+?)(?:\?|$)/i);
+    if (!m) return null;
+    try {
+        return decodeURIComponent(m[1]);
+    } catch {
+        return m[1];
+    }
+}
+
+const resolveRawPublicId = (report) =>
+    report.cloudinaryPublicId || inferRawPublicIdFromCloudinaryUrl(report.pdfFileUrl || report.cloudinarySecureUrl);
+
 /**
  * Upload a generated PDF from disk to Cloudinary as a raw asset, then caller should unlink the local file.
  * Uses public access_mode so the returned HTTPS link works in browsers and for simple GET fetches.
@@ -21,6 +37,7 @@ export async function uploadReportPdfToCloudinary(localPdfPath) {
 
     const baseOpts = {
         resource_type: "raw",
+        type: "upload",
         folder,
         use_filename: true,
         unique_filename: true,
@@ -44,16 +61,26 @@ export async function uploadReportPdfToCloudinary(localPdfPath) {
         throw new Error("Cloudinary upload response missing secure_url or public_id");
     }
 
+    const version = result.version != null ? Number(result.version) : undefined;
+
     return {
         publicId: result.public_id,
         secureUrl,
         pdfFileUrl: secureUrl,
+        version: Number.isFinite(version) ? version : undefined,
         bytes: Number(result.bytes) || Number(result.size) || 0,
     };
 }
 
-/** Remove raw asset from Cloudinary (safe if publicId missing). */
-export async function deleteReportPdfFromCloudinary(publicId) {
+/**
+ * Remove raw asset from Cloudinary.
+ * @param {string|object} reportOrPublicId — `public_id` string, or a report-like object with `cloudinaryPublicId` / URLs.
+ */
+export async function deleteReportPdfFromCloudinary(reportOrPublicId) {
+    const publicId =
+        typeof reportOrPublicId === "string"
+            ? reportOrPublicId
+            : resolveRawPublicId(reportOrPublicId);
     if (!publicId || typeof publicId !== "string") return;
     try {
         await cloudinary.uploader.destroy(publicId, { resource_type: "raw" });
@@ -62,80 +89,46 @@ export async function deleteReportPdfFromCloudinary(publicId) {
     }
 }
 
-export function getSignedRawReportUrl(publicId) {
-    if (!publicId || typeof publicId !== "string") {
-        throw new Error("Missing Cloudinary public_id for report");
-    }
-    return cloudinary.url(publicId, {
+const signedRawOpts = (report, extra = {}) => {
+    const opts = {
         resource_type: "raw",
+        type: "upload",
         secure: true,
         sign_url: true,
-    });
-}
-
-async function fetchPdfFromUrl(url) {
-    const fetchInit = {
-        method: "GET",
-        headers: {
-            Accept: "application/pdf,application/octet-stream,*/*",
-            "User-Agent": "EBA-IoT-Backend/1.0",
-        },
-        redirect: "follow",
+        ...extra,
     };
-    if (typeof AbortSignal !== "undefined" && typeof AbortSignal.timeout === "function") {
-        fetchInit.signal = AbortSignal.timeout(45_000);
+    const ver = Number(report.cloudinaryVersion);
+    // Version must match the asset tied to `cloudinaryPublicId`. Omit when we only inferred public_id from a URL.
+    if (report.cloudinaryPublicId && report.cloudinaryVersion != null && Number.isFinite(ver) && ver > 0) {
+        opts.version = ver;
     }
-
-    const res = await fetch(url, fetchInit);
-    if (!res.ok) {
-        const t = (await res.text()).slice(0, 180);
-        throw new Error(`HTTP ${res.status}: ${t}`);
-    }
-    const buf = Buffer.from(await res.arrayBuffer());
-    const head = buf.subarray(0, Math.min(32, buf.length)).toString();
-    if (head.trimStart().startsWith("<")) {
-        throw new Error("Response is HTML, not a PDF");
-    }
-    if (buf.length < 100) {
-        throw new Error("Response too small to be a PDF");
-    }
-    return buf;
-}
-
-async function fetchPdfFromSignedPublicId(publicId) {
-    const url = getSignedRawReportUrl(publicId);
-    return await fetchPdfFromUrl(url);
-}
+    return opts;
+};
 
 /**
- * Load PDF bytes for a Cloudinary-backed report.
- * 1) Try stored link(s) from DB (`pdfFileUrl`, then `cloudinarySecureUrl`) — what Cloudinary returned at upload.
- * 2) Fall back to signed URL built from `cloudinaryPublicId`.
+ * Signed HTTPS URL for inline viewing.
+ * Never redirect to unsigned `secure_url` — many accounts return 401 without a signature.
  */
-export async function fetchReportPdfBuffer(report) {
-    const urlCandidates = [
-        report.pdfFileUrl,
-        report.cloudinarySecureUrl,
-    ]
-        .filter((u) => typeof u === "string" && u.length > 10)
-        .map(toHttps);
-
-    const tried = [];
-    for (const url of [...new Set(urlCandidates)]) {
-        try {
-            return await fetchPdfFromUrl(url);
-        } catch (e) {
-            tried.push(`${url.slice(0, 64)}… -> ${e.message}`);
-        }
+export function getCloudinaryViewRedirectUrl(report) {
+    const publicId = resolveRawPublicId(report);
+    if (!publicId) {
+        throw new Error(
+            "Cannot build a signed Cloudinary URL (missing public_id and no inferable URL). Regenerate this report."
+        );
     }
+    return cloudinary.url(publicId, signedRawOpts(report));
+}
 
-    if (report.cloudinaryPublicId) {
-        try {
-            return await fetchPdfFromSignedPublicId(report.cloudinaryPublicId);
-        } catch (e) {
-            tried.push(`signed:${report.cloudinaryPublicId} -> ${e.message}`);
-        }
+/** Signed URL that prompts download with a sensible filename (Cloudinary `fl_attachment`). */
+export function getCloudinaryDownloadRedirectUrl(report) {
+    const rawName = report.originalFilename || "report.pdf";
+    const safeName = rawName.replace(/[^\w.\-]+/g, "_").slice(0, 120) || "report.pdf";
+
+    const publicId = resolveRawPublicId(report);
+    if (!publicId) {
+        throw new Error(
+            "Cannot build a signed Cloudinary URL (missing public_id and no inferable URL). Regenerate this report."
+        );
     }
-
-    throw new Error(tried.length ? tried.join(" | ") : "No Cloudinary URL or public_id on report");
+    return cloudinary.url(publicId, signedRawOpts(report, { flags: `attachment:${safeName}` }));
 }
