@@ -4,9 +4,17 @@ import mqtt from 'mqtt';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import http from 'http';
+import serverless from 'serverless-http';
 import path from 'path';
 import mongoose from 'mongoose';
-import { initSocket, getIo } from './services/SocketService.js';
+import {
+    initSocket,
+    emitSensorData,
+    emitNewAlerts,
+    emitDeviceStatus,
+    emitControlAck,
+    emitDeviceStartup
+} from './services/SocketService.js';
 import { SensorData } from './models/SensorData.js';
 import SensorRouter from './routes/SensorRoutes.js';
 import reportRoutes from "./routes/ReportRoutes.js";
@@ -27,7 +35,7 @@ const app = express();
 const server = http.createServer(app);
 
 // Initialize Socket.IO
-const io = initSocket(server);
+initSocket(server);
 
 /*const corsOptions = {
     origin: [
@@ -121,19 +129,17 @@ const initMQTT = () => {
                 const dataToSend = { ...payload, timestamp: sensorData.createdAt };
                 latestSensorData = dataToSend;
 
-                const io = getIo();
-                io.emit('sensor-data', dataToSend);
+                emitSensorData(dataToSend);
 
                 if (alerts?.length) {
                     console.log(`⚠️ Created ${alerts.length} new alerts`);
-                    io.emit('new-alerts', alerts);
+                    emitNewAlerts(alerts);
                 }
             }
             else if (topic.includes('/control/status')) {
                 console.log('📊 Device status received');
                 latestDeviceStatus = payload;
-                const io = getIo();
-                io.emit('device-status', payload);
+                emitDeviceStatus(payload);
 
                 if (payload.requestId && pendingRequests.has(payload.requestId)) {
                     const { resolve } = pendingRequests.get(payload.requestId);
@@ -143,8 +149,7 @@ const initMQTT = () => {
             }
             else if (topic.includes('/control/ack')) {
                 console.log('✅ Acknowledgment received');
-                const io = getIo();
-                io.emit('control-ack', payload);
+                emitControlAck(payload);
 
                 if (payload.requestId && pendingRequests.has(payload.requestId)) {
                     const { resolve } = pendingRequests.get(payload.requestId);
@@ -155,8 +160,7 @@ const initMQTT = () => {
             else if (topic.includes('/control/startup')) {
                 console.log('🚀 Device startup detected');
                 latestDeviceStatus = payload;
-                const io = getIo();
-                io.emit('device-startup', payload);
+                emitDeviceStartup(payload);
             }
 
         } catch (error) {
@@ -177,7 +181,8 @@ const setupRoutes = () => {
             alerts: '/api/v1/alerts',
             control: '/api/v1/control',
             users: '/api/v1/users',
-            auth: '/api/v1/auth'
+            auth: '/api/v1/auth',
+            socketIo: 'Same origin, path /socket.io (JWT via handshake.auth.token optional; join-user still supported)'
         }
     }));
 
@@ -315,5 +320,14 @@ process.on('unhandledRejection', (reason, promise) => {
 
 startServer();
 
-export default app;
-export { mqttClient, pendingRequests, getIo, latestSensorData, latestDeviceStatus };
+// Vercel invokes `export default` as a serverless function. Exporting only `app` skips the
+// `http.Server` that Socket.IO is bound to, so `/socket.io/*` fell through to Express 404.
+// `serverless-http` forwards requests to the real `server`, enabling Engine.IO long-polling.
+// Note: Vercel still limits long-lived WebSockets; prefer polling or a dedicated realtime host for production scale.
+const vercelHandler = serverless(server, {
+    binary: ['application/pdf', 'application/octet-stream', 'image/png', 'image/jpeg', 'image/gif', 'image/webp'],
+});
+
+export default process.env.VERCEL ? vercelHandler : app;
+export { mqttClient, pendingRequests, latestSensorData, latestDeviceStatus };
+export { getIo } from './services/SocketService.js';

@@ -40,12 +40,105 @@ const getChartCanvas = async () => {
     }
 };
 
+/** Build scales from dataset yAxisIDs so CO2-only reports still render a chart. */
+const buildLineScales = (datasets) => {
+    const ids = new Set(datasets.map((d) => d.yAxisID || "y"));
+    const usesY = ids.has("y");
+    const usesY2 = ids.has("y2");
+    const usesYCo2 = ids.has("yCo2");
+    const onlyCo2 = usesYCo2 && !usesY && !usesY2;
+
+    const scales = {};
+
+    if (usesY) {
+        scales.y = {
+            type: "linear",
+            position: "left",
+            beginAtZero: true,
+            max: 100,
+            grid: { color: P.grid, lineWidth: 1 },
+            ticks: {
+                color: P.text,
+                font: { size: 10 },
+                callback: (v) => `${v}%`,
+            },
+            title: {
+                display: true,
+                text: "Percentage (%)",
+                color: P.text,
+                font: { size: 10 },
+            },
+        };
+    }
+
+    if (usesY2) {
+        scales.y2 = {
+            type: "linear",
+            position: "right",
+            beginAtZero: false,
+            grid: { drawOnChartArea: false },
+            ticks: {
+                color: P.text,
+                font: { size: 10 },
+                callback: (v) => `${v}°C`,
+            },
+            title: {
+                display: true,
+                text: "Temperature (°C)",
+                color: P.text,
+                font: { size: 10 },
+            },
+        };
+    }
+
+    if (usesYCo2) {
+        scales.yCo2 = {
+            type: "linear",
+            position: onlyCo2 ? "left" : "right",
+            offset: !onlyCo2,
+            beginAtZero: false,
+            suggestedMin: 300,
+            grid: {
+                color: P.grid,
+                lineWidth: 1,
+                drawOnChartArea: onlyCo2,
+            },
+            ticks: {
+                color: P.text,
+                font: { size: 10 },
+                callback: (v) => `${Math.round(v)}`,
+            },
+            title: {
+                display: true,
+                text: "CO2 (ppm)",
+                color: P.text,
+                font: { size: 10 },
+            },
+        };
+    }
+
+    return scales;
+};
+
 // ─────────────────────────────────────────────────────────
-// LINE CHART  (temperature + humidity + soil + water)
+// LINE CHART  (temperature + humidity + soil + water + CO2)
 // ─────────────────────────────────────────────────────────
 export const generateChart = async (labels, datasets) => {
     const canvas = await getChartCanvas();
     if (!canvas) return null;
+
+    const lineScales = buildLineScales(datasets);
+    lineScales.x = {
+        grid: { color: P.grid, lineWidth: 0.5 },
+        ticks: {
+            color: P.text,
+            font: { size: 9 },
+            maxRotation: 45,
+            minRotation: 30,
+            autoSkip: true,
+            maxTicksLimit: 14,
+        },
+    };
 
     const config = {
         type: "line",
@@ -76,54 +169,7 @@ export const generateChart = async (labels, datasets) => {
                     intersect: false,
                 },
             },
-            scales: {
-                y: {
-                    type: "linear",
-                    position: "left",
-                    beginAtZero: true,
-                    max: 100,
-                    grid: { color: P.grid, lineWidth: 1 },
-                    ticks: {
-                        color: P.text,
-                        font: { size: 10 },
-                        callback: (v) => `${v}%`,
-                    },
-                    title: {
-                        display: true,
-                        text: "Percentage (%)",
-                        color: P.text,
-                        font: { size: 10 },
-                    },
-                },
-                y2: {
-                    type: "linear",
-                    position: "right",
-                    beginAtZero: false,
-                    grid: { drawOnChartArea: false },
-                    ticks: {
-                        color: P.text,
-                        font: { size: 10 },
-                        callback: (v) => `${v}°C`,
-                    },
-                    title: {
-                        display: true,
-                        text: "Temperature (°C)",
-                        color: P.text,
-                        font: { size: 10 },
-                    },
-                },
-                x: {
-                    grid: { color: P.grid, lineWidth: 0.5 },
-                    ticks: {
-                        color: P.text,
-                        font: { size: 9 },
-                        maxRotation: 45,
-                        minRotation: 30,
-                        autoSkip: true,
-                        maxTicksLimit: 14,
-                    },
-                },
-            },
+            scales: lineScales,
             elements: {
                 point: { radius: 2, hoverRadius: 5, borderWidth: 2 },
                 line: { tension: 0.35, borderWidth: 2 },
@@ -201,6 +247,24 @@ export const generateFullChart = async (data, metricFilter) => {
                 fill: false,
                 pointRadius: 2,
                 yAxisID: "y",
+            });
+        }
+    }
+
+    if (!only || only === "co2" || only === "co2_ppm") {
+        const hasCo2 = data.some((d) => {
+            const v = d.co2_ppm;
+            return v != null && !isNaN(Number(v));
+        });
+        if (hasCo2) {
+            datasets.push({
+                label: "CO2 (ppm)",
+                data: sample.map((d) => d.co2_ppm ?? null),
+                borderColor: P.warn500,
+                backgroundColor: `${P.warn500}22`,
+                fill: false,
+                pointRadius: 2,
+                yAxisID: "yCo2",
             });
         }
     }

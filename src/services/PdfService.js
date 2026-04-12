@@ -45,9 +45,9 @@ const generateAnalysisText = (metrics, selectedMetric) => {
             text += `with a mean of ${s.avg} ${m.unit} and a standard deviation of ${s.stdDev} ${m.unit}. `;
             if (m.key === "co2_ppm") {
                 const avg = parseFloat(s.avg);
-                if (avg > 1000) text += "CO₂ levels exceed recommended thresholds — immediate ventilation is required.";
-                else if (avg > 800) text += "CO₂ levels are elevated. Increasing ventilation frequency is advised.";
-                else text += "CO₂ levels remain within acceptable limits.";
+                if (avg > 1000) text += "CO2 levels exceed recommended thresholds — immediate ventilation is required.";
+                else if (avg > 800) text += "CO2 levels are elevated. Increasing ventilation frequency is advised.";
+                else text += "CO2 levels remain within acceptable limits.";
             }
             return text;
         }
@@ -57,7 +57,7 @@ const generateAnalysisText = (metrics, selectedMetric) => {
     for (const m of metrics) {
         if (m.stats.count === 0) continue;
         const s = m.stats;
-        text += `${m.name} ranged from ${s.min} to ${s.max} ${m.unit} (avg ${s.avg} ${m.unit}, σ = ${s.stdDev}). `;
+        text += `${m.name} ranged from ${s.min} to ${s.max} ${m.unit} (avg ${s.avg} ${m.unit}, SD ${s.stdDev}). `;
     }
     return text;
 };
@@ -79,19 +79,19 @@ const generateRecommendations = (metrics, data, selectedMetric) => {
     if (show("temperature")) {
         if (avgTemp > 28) recs.push("• Temperature is above 28°C average. Review cooling systems and shading strategies.");
         else if (avgTemp < 18) recs.push("• Temperature is below 18°C average. Evaluate heating or improved insulation.");
-        else recs.push("• Temperature is within the optimal 18–28°C range. Continue regular monitoring.");
+        else recs.push("• Temperature is within the optimal 18-28°C range. Continue regular monitoring.");
     }
 
     if (show("humidity")) {
         if (avgHum > 75) recs.push("• Humidity exceeds 75% average — risk of mould growth. Improve airflow and dehumidification.");
         else if (avgHum < 30) recs.push("• Low humidity detected (< 30%). Consider humidification to improve plant and occupant comfort.");
-        else recs.push("• Humidity levels are within the recommended 30–75% range.");
+        else recs.push("• Humidity levels are within the recommended 30-75% range.");
     }
 
     if (show("co2")) {
-        if (avgCO2 > 1000) recs.push("• CRITICAL: CO₂ exceeds 1000 ppm. Implement immediate ventilation protocols.");
-        else if (avgCO2 > 800) recs.push("• CO₂ is moderately elevated (800–1000 ppm). Scheduled ventilation is recommended.");
-        else recs.push("• CO₂ levels are within acceptable limits (< 800 ppm).");
+        if (avgCO2 > 1000) recs.push("• CRITICAL: CO2 exceeds 1000 ppm. Implement immediate ventilation protocols.");
+        else if (avgCO2 > 800) recs.push("• CO2 is moderately elevated (800-1000 ppm). Scheduled ventilation is recommended.");
+        else recs.push("• CO2 levels are within acceptable limits (< 800 ppm).");
     }
 
     if (show("soil")) {
@@ -99,7 +99,7 @@ const generateRecommendations = (metrics, data, selectedMetric) => {
         if (hasSoilData) {
             if (avgSoil < 20) recs.push("• Soil moisture is critically low. Review irrigation scheduling.");
             else if (avgSoil > 80) recs.push("• Soil moisture is very high. Reduce watering frequency to prevent root issues.");
-            else recs.push("• Soil moisture levels are within the healthy 20–80% range.");
+            else recs.push("• Soil moisture levels are within the healthy 20-80% range.");
         } else {
             recs.push("• Soil moisture sensor returned no data this period. Verify sensor connectivity.");
         }
@@ -226,7 +226,7 @@ export const generatePDF = async (rawData, options) => {
         // Centre: confidential tag
         doc.fillColor(C.textMuted).fontSize(T.small.size).font(T.small.font)
             .text(
-                `Confidential  ·  Generated: ${new Date().toLocaleDateString()}`,
+                `Confidential  |  Generated: ${new Date().toLocaleDateString()}`,
                 MARGIN, fy + 8,
                 { align: "center", width: CONTENT_W }
             );
@@ -299,10 +299,16 @@ export const generatePDF = async (rawData, options) => {
     doc.rect(0, 0, PAGE_W, 90).fill(C.primaryDeep);
     doc.rect(0, 88, PAGE_W, 3).fill(C.primary);
 
+    // Wide EBA OBSERVA mark: constrain with fit so it stays sharp in the header band.
+    const LOGO_FIT = [168, 54];
+    const TITLE_X = MARGIN + LOGO_FIT[0] + 14;
     const logoPath = path.join(process.cwd(), "assets", "logo.png");
     if (fs.existsSync(logoPath)) {
-        try { doc.image(logoPath, MARGIN, 18, { height: 50 }); }
-        catch { doc.circle(MARGIN + 22, 43, 22).fill(C.primary); }
+        try {
+            doc.image(logoPath, MARGIN, 16, { fit: LOGO_FIT });
+        } catch {
+            doc.circle(MARGIN + 22, 43, 22).fill(C.primary);
+        }
     } else {
         // Minimal leaf icon placeholder
         doc.roundedRect(MARGIN, 18, 46, 50, 8).fill(C.primary);
@@ -311,16 +317,18 @@ export const generatePDF = async (rawData, options) => {
     }
 
     doc.fillColor(C.white).fontSize(T.h1.size).font(T.h1.font)
-        .text("ENVIRONMENTAL MONITORING REPORT", MARGIN + 58, 22, { width: 390 });
+        .text("ENVIRONMENTAL MONITORING REPORT", TITLE_X, 22, { width: PAGE_W - TITLE_X - MARGIN });
     doc.fillColor(`${C.white}CC`).fontSize(10).font("Helvetica-Bold")
-        .text(`Report Type: ${(type || "CUSTOM").toUpperCase()}  ·  Generated: ${new Date().toLocaleString()}`, MARGIN + 58, 50);
+        .text(`Report Type: ${(type || "CUSTOM").toUpperCase()}  |  Generated: ${new Date().toLocaleString()}`, TITLE_X, 50, {
+            width: PAGE_W - TITLE_X - MARGIN,
+        });
 
     // Metric badge if filtered
     if (metric && metric !== "all") {
         const badge = metric.replace("_ppm", "").replace("_percent", "").toUpperCase();
-        doc.roundedRect(MARGIN + 58, 64, badge.length * 7 + 16, 16, 4).fill(C.primary);
+        doc.roundedRect(TITLE_X, 64, badge.length * 7 + 16, 16, 4).fill(C.primary);
         doc.fillColor(C.white).fontSize(8).font("Helvetica-Bold")
-            .text(`METRIC: ${badge}`, MARGIN + 66, 68);
+            .text(`METRIC: ${badge}`, TITLE_X + 8, 68);
     }
 
     hasContentOnCurrentPage = true;
@@ -332,7 +340,7 @@ export const generatePDF = async (rawData, options) => {
     const metricDefs = [
         { name: "Temperature", key: "temperature", unit: "°C", color: C.chart1 },
         { name: "Humidity", key: "humidity", unit: "%", color: C.chart2 },
-        { name: "CO₂", key: "co2_ppm", unit: "ppm", color: C.chart3 },
+        { name: "CO2", key: "co2_ppm", unit: "ppm", color: C.chart3 },
         { name: "Soil Moisture", key: "soil_moisture_percent", unit: "%", color: C.chart4 },
         { name: "Water Level", key: "water_level_percent", unit: "%", color: C.chart5 },
     ].map((m) => ({
@@ -343,7 +351,7 @@ export const generatePDF = async (rawData, options) => {
 
     const getMetricStats = (key) => metricDefs.find((m) => m.key === key)?.stats;
 
-    const dateRange = `${new Date(data[0].timestamp).toLocaleDateString()} – ${new Date(data[data.length - 1].timestamp).toLocaleDateString()}`;
+    const dateRange = `${new Date(data[0].timestamp).toLocaleDateString()} - ${new Date(data[data.length - 1].timestamp).toLocaleDateString()}`;
     const tempStats = getMetricStats("temperature");
     const humStats = getMetricStats("humidity");
     const co2Stats = getMetricStats("co2_ppm");
@@ -362,13 +370,13 @@ export const generatePDF = async (rawData, options) => {
         `${data.length} contained valid sensor readings (${rawData.length - data.length} heartbeat-only records excluded). `;
 
     if (!metric || metric === "all" || metric === "temperature")
-        summaryText += `Average temperature was ${tempStats?.avg ?? "--"}°C (range: ${tempStats?.min ?? "--"} – ${tempStats?.max ?? "--"}°C). `;
+        summaryText += `Average temperature was ${tempStats?.avg ?? "--"}°C (range: ${tempStats?.min ?? "--"} - ${tempStats?.max ?? "--"}°C). `;
     if (!metric || metric === "all" || metric === "humidity")
         summaryText += `Relative humidity averaged ${humStats?.avg ?? "--"}%. `;
     if (!metric || metric === "all" || metric === "co2" || metric === "co2_ppm") {
         const avgCO2n = parseFloat(co2Stats?.avg ?? 0);
-        summaryText += `CO₂ averaged ${co2Stats?.avg ?? "--"} ppm. `;
-        if (avgCO2n > 1000) summaryText += "CO₂ levels exceeded safe thresholds, requiring immediate ventilation. ";
+        summaryText += `CO2 averaged ${co2Stats?.avg ?? "--"} ppm. `;
+        if (avgCO2n > 1000) summaryText += "CO2 levels exceeded safe thresholds, requiring immediate ventilation. ";
     }
     if ((!metric || metric === "all" || metric === "soil") && soilStats?.count > 0 && soilStats.avg !== "--")
         summaryText += `Soil moisture averaged ${soilStats.avg}%. `;
@@ -408,14 +416,18 @@ export const generatePDF = async (rawData, options) => {
         doc.fillColor(m.color).fontSize(8).font("Helvetica-Bold")
             .text(m.name.toUpperCase(), x + 14, currentY + 9, { width: KPI_W - 20 });
 
-        doc.fillColor(C.text).fontSize(18).font("Helvetica-Bold")
-            .text(`${m.stats.avg}`, x + 14, currentY + 20);
+        // One line for value + unit avoids PDFKit widthOfString/font mismatch (was overlapping the decimal).
+        let valueLine;
+        if (m.unit === "ppm") valueLine = `${m.stats.avg} ppm`;
+        else if (m.unit === "%") valueLine = `${m.stats.avg}%`;
+        else valueLine = `${m.stats.avg} ${m.unit}`;
 
-        doc.fillColor(C.textLight).fontSize(7).font("Helvetica")
-            .text(m.unit, x + 14 + doc.widthOfString(`${m.stats.avg}`, { fontSize: 18 }) + 3, currentY + 27);
+        doc.fillColor(C.text).fontSize(16).font("Helvetica-Bold")
+            .text(valueLine, x + 14, currentY + 20, { width: KPI_W - 20, ellipsis: true });
 
+        // ASCII-only: standard PDF fonts often substitute arrows and middle dots with wrong glyphs.
         doc.fillColor(C.textMuted).fontSize(7.5).font("Helvetica")
-            .text(`↓ ${m.stats.min}  ·  avg  ·  ↑ ${m.stats.max}`, x + 14, currentY + 38, { width: KPI_W - 20 });
+            .text(`Min ${m.stats.min}  /  Max ${m.stats.max}`, x + 14, currentY + 38, { width: KPI_W - 20 });
 
         col++;
         if (col === 2) {
@@ -439,11 +451,22 @@ export const generatePDF = async (rawData, options) => {
     doc.fillColor(C.textLight).fontSize(8).font("Helvetica")
         .text(`|  Date Range: ${dateRange}`, MARGIN + 90, currentY + 10);
 
-    const paramLabel = !metric || metric === "all"
-        ? "Temperature · Humidity · CO₂ · Soil · Water"
-        : metric.replace("_ppm", "").replace("_percent", "");
+    const paramLabel = (() => {
+        if (!metric || metric === "all") return "Temperature | Humidity | CO2 | Soil | Water";
+        const map = {
+            temperature: "Temperature",
+            humidity: "Humidity",
+            co2: "CO2",
+            co2_ppm: "CO2",
+            soil: "Soil moisture",
+            soil_moisture_percent: "Soil moisture",
+            water: "Water level",
+            water_level_percent: "Water level",
+        };
+        return map[metric] || metric.replace("_ppm", "").replace("_percent", "");
+    })();
     doc.fillColor(C.textLight).fontSize(8).font("Helvetica")
-        .text(`|  Params: ${paramLabel}`, MARGIN + 280, currentY + 10, { width: CONTENT_W - 290 });
+        .text(`|  Params: ${paramLabel}`, MARGIN + 280, currentY + 10, { width: CONTENT_W - 290, ellipsis: true });
 
     currentY += 40;
     hasContentOnCurrentPage = true;
@@ -464,7 +487,7 @@ export const generatePDF = async (rawData, options) => {
             show: !metric || metric === "humidity" || metric === "all"
         },
         {
-            key: "co2_ppm", label: "CO₂ (ppm)", baseW: 72,
+            key: "co2_ppm", label: "CO2 (ppm)", baseW: 72,
             show: !metric || metric === "co2" || metric === "co2_ppm" || metric === "all"
         },
         {
@@ -622,13 +645,15 @@ export const generatePDF = async (rawData, options) => {
         doc.image(chartImage, MARGIN + 10, currentY + 10, { fit: [CONTENT_W - 20, CHART_H - 20] });
         currentY += CHART_H + 6;
         doc.fillColor(C.textLight).fontSize(T.caption.size).font(T.caption.font)
-            .text("Figure 1: Environmental parameter trends over time (temperature on right axis, percentages on left axis)",
-                MARGIN, currentY, { align: "center", width: CONTENT_W });
+            .text(
+                "Figure 1: Environmental parameter trends over time (percent on left where applicable; temperature and CO2 on right scales).",
+                MARGIN, currentY, { align: "center", width: CONTENT_W }
+            );
         currentY += 22;
         hasContentOnCurrentPage = true;
     }
 
-    // ── Figure 2: CO₂ distribution pie ────────────────────────
+    // ── Figure 2: CO2 distribution pie ────────────────────────
     const showCO2 = !metric || metric === "all" || metric === "co2" || metric === "co2_ppm";
     if (showCO2) {
         const co2Vals = data.map((d) => d.co2_ppm || 0);
@@ -653,7 +678,7 @@ export const generatePDF = async (rawData, options) => {
                 doc.image(pieImage, MARGIN + 10, currentY + 10, { fit: [CONTENT_W - 20, CHART_H - 20] });
                 currentY += CHART_H + 6;
                 doc.fillColor(C.textLight).fontSize(T.caption.size).font(T.caption.font)
-                    .text("Figure 2: CO₂ level distribution across all recorded readings",
+                    .text("Figure 2: CO2 level distribution across all recorded readings",
                         MARGIN, currentY, { align: "center", width: CONTENT_W });
                 currentY += 22;
                 hasContentOnCurrentPage = true;
