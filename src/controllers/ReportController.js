@@ -69,6 +69,19 @@ const verifyReportAccessToken = (token, report, action) => {
     }
 };
 
+const verifyOwnerFromBearerHeader = (authHeader, report) => {
+    try {
+        if (!authHeader || !authHeader.startsWith("Bearer ")) return false;
+        const token = authHeader.split(" ")[1];
+        if (!token) return false;
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        const ownerId = String(report?.createdBy?._id || report?.createdBy || "");
+        return Boolean(ownerId && String(decoded?.id || "") === ownerId);
+    } catch {
+        return false;
+    }
+};
+
 const buildSignedReportLinks = (req, report) => {
     const baseUrl = `${req.protocol}://${req.get("host")}`;
     const viewToken = signReportAccessToken(req.user.id, report._id, "view");
@@ -212,11 +225,12 @@ export const downloadReport = async (req, res) => {
         const token = req.query?.access;
         const canDownload =
             verifyReportAccessToken(token, report, "download") ||
-            verifyReportAccessToken(token, report, "view");
+            verifyReportAccessToken(token, report, "view") ||
+            verifyOwnerFromBearerHeader(req.headers.authorization, report);
         if (!canDownload) {
             return res.status(401).json({
                 success: false,
-                message: "Invalid or expired report access link",
+                message: "Invalid/expired report link or missing valid auth token",
             });
         }
 
@@ -247,13 +261,8 @@ export const downloadReport = async (req, res) => {
             res.setHeader("Content-Type", "application/pdf");
             res.setHeader("Content-Disposition", `attachment; filename="${report.originalFilename}"`);
             res.setHeader("Content-Length", buf.length);
-            const stream = Readable.from(buf);
-            stream.pipe(res);
-            stream.on("error", (err) => {
-                if (!res.headersSent) {
-                    res.status(500).json({ error: err.message || "Download failed" });
-                }
-            });
+            // Send buffer directly to avoid stream chunk-type edge cases in some runtimes.
+            res.end(buf);
             return;
         }
 
@@ -336,13 +345,7 @@ export const viewReport = async (req, res) => {
             res.setHeader("Content-Type", "application/pdf");
             res.setHeader("Content-Disposition", `inline; filename="${report.originalFilename}"`);
             res.setHeader("Content-Length", buf.length);
-            const stream = Readable.from(buf);
-            stream.pipe(res);
-            stream.on("error", (err) => {
-                if (!res.headersSent) {
-                    res.status(500).json({ error: err.message || "Failed to stream file" });
-                }
-            });
+            res.end(buf);
             return;
         }
 
