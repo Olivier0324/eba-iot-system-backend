@@ -615,7 +615,7 @@ async function notifyAdmins(message) {
             <div style="background: #f3f4f6; padding: 16px; border-radius: 8px; margin: 20px 0;">
                 <p>${message.message}</p>
             </div>
-            <a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}/dashboard/admin/messages" class="button">
+            <a href="${process.env.FRONTEND_URL || 'https://eba-iot-system-frontend.vercel.app'}/dashboard/admin/messages" class="button">
                 View in Dashboard
             </a>
         </div>

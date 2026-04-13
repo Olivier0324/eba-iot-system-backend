@@ -561,7 +561,7 @@ export const createUser = async (req, res) => {
  * @swagger
  * /users/{id}:
  *   put:
- *     summary: Update user (Admin/Manager only)
+ *     summary: Update user (Admin only)
  *     tags: [User Management]
  *     security:
  *       - bearerAuth: []
@@ -569,11 +569,40 @@ export const createUser = async (req, res) => {
 export const updateUser = async (req, res) => {
     try {
         const { id } = req.params;
-        const { username, email, role, isActive } = req.body;
+        const { username, email, role, isActive, newPassword } = req.body;
+
+        if (id === req.user.id) {
+            return res.status(400).json({
+                success: false,
+                message: 'Admins cannot update their own account. Another admin must do this.'
+            });
+        }
 
         const user = await User.findById(id);
         if (!user) {
             return res.status(404).json({ success: false, message: 'User not found' });
+        }
+
+        if (role && !['admin', 'manager', 'user'].includes(role)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid role. Must be admin, manager, or user'
+            });
+        }
+
+        if (user.role === 'admin') {
+            const blockedFields = [];
+            if (username !== undefined) blockedFields.push('username');
+            if (email !== undefined) blockedFields.push('email');
+            if (newPassword !== undefined) blockedFields.push('newPassword');
+
+            // Protect admin accounts from profile/password edits; only role and activation are allowed.
+            if (blockedFields.length > 0) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'For admin accounts, only role and isActive can be updated.'
+                });
+            }
         }
 
         if (email && email !== user.email) {
@@ -589,7 +618,23 @@ export const updateUser = async (req, res) => {
 
         if (username) user.username = username;
         if (role) user.role = role;
-        if (isActive !== undefined) user.isActive = isActive;
+        if (isActive !== undefined) {
+            user.isActive = isActive;
+            if (!isActive) user.isLoggedIn = false;
+        }
+
+        if (newPassword !== undefined) {
+            if (typeof newPassword !== 'string' || newPassword.length < 6) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'New password must be at least 6 characters'
+                });
+            }
+            user.password = await bcrypt.hash(newPassword, 10);
+            user.isLoggedIn = false;
+            user.otp = null;
+            user.otpExpiresAt = null;
+        }
 
         await user.save();
 

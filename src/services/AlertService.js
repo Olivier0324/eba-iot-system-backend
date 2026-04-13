@@ -836,7 +836,7 @@ class AlertService {
                         <hr class="divider">
                         
                         <div class="button-container">
-                            <a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}/dashboard/alerts/${alert._id}" class="button">
+                            <a href="${process.env.FRONTEND_URL || 'https://eba-iot-system-frontend.vercel.app'}/dashboard/alerts/${alert._id}" class="button">
                                 <i class="fas fa-chart-line"></i>
                                 View Monitoring Dashboard
                                 <i class="fas fa-arrow-right" style="font-size: 12px;"></i>

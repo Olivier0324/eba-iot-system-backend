@@ -18,7 +18,7 @@ const router = express.Router();
  * @swagger
  * tags:
  *   name: User Management
- *   description: User management endpoints (Admin/Manager only)
+ *   description: User management endpoints (Admin/Manager only; user update is Admin only)
  */
 
 /**
@@ -87,6 +87,10 @@ const router = express.Router();
  *           enum: [admin, manager, user]
  *         isActive:
  *           type: boolean
+ *         newPassword:
+ *           type: string
+ *           format: password
+ *           description: Admin-only reset password for the target user
  */
 
 // ==================== PROTECTED ROUTES (Admin/Manager only) ====================
@@ -182,7 +186,7 @@ router.get('/:id', protect, authorize('admin', 'manager'), getUserById);
  * @swagger
  * /users/{id}:
  *   put:
- *     summary: Update user
+ *     summary: Update user (Admin only)
  *     tags: [User Management]
  *     security:
  *       - bearerAuth: []
@@ -203,7 +207,7 @@ router.get('/:id', protect, authorize('admin', 'manager'), getUserById);
  *       404:
  *         description: User not found
  */
-router.put('/:id', protect, authorize('admin', 'manager'), updateUser);
+router.put('/:id', protect, authorize('admin'), updateUser);
 
 /**
  * @swagger
