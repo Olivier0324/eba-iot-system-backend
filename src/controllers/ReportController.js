@@ -6,6 +6,7 @@ import { Report } from "../models/Report.js";
 import fs from "fs";
 import path from "path";
 import { Readable } from "stream";
+import jwt from "jsonwebtoken";
 import {
     isCloudinaryReportStorageEnabled,
     uploadReportPdfToCloudinary,
@@ -36,6 +37,46 @@ const reportStorageUsesMongo = () =>
 const isReportOwner = (report, user) => {
     const ownerId = report?.createdBy?._id || report?.createdBy;
     return Boolean(ownerId && user?.id && String(ownerId) === String(user.id));
+};
+
+const REPORT_LINK_TTL_SECONDS = Number(process.env.REPORT_LINK_TTL_SECONDS || 60 * 60);
+const REPORT_LINK_KIND = "report_access";
+
+const signReportAccessToken = (userId, reportId, action) =>
+    jwt.sign(
+        {
+            kind: REPORT_LINK_KIND,
+            rid: String(reportId),
+            uid: String(userId),
+            action,
+        },
+        process.env.JWT_SECRET,
+        { expiresIn: REPORT_LINK_TTL_SECONDS }
+    );
+
+const verifyReportAccessToken = (token, report, action) => {
+    try {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        const ownerId = String(report?.createdBy?._id || report?.createdBy || "");
+        return (
+            decoded?.kind === REPORT_LINK_KIND &&
+            decoded?.action === action &&
+            String(decoded?.rid || "") === String(report?._id || "") &&
+            String(decoded?.uid || "") === ownerId
+        );
+    } catch {
+        return false;
+    }
+};
+
+const buildSignedReportLinks = (req, report) => {
+    const baseUrl = `${req.protocol}://${req.get("host")}`;
+    const viewToken = signReportAccessToken(req.user.id, report._id, "view");
+    const downloadToken = signReportAccessToken(req.user.id, report._id, "download");
+    return {
+        viewUrl: `${baseUrl}/api/v1/reports/view/${report._id}?access=${encodeURIComponent(viewToken)}`,
+        downloadUrl: `${baseUrl}/api/v1/reports/download/${report._id}?access=${encodeURIComponent(downloadToken)}`,
+    };
 };
 
 // Generate and store PDF: REPORT_STORAGE=mongodb → MongoDB; else Cloudinary if configured; else local disk
@@ -127,8 +168,7 @@ export const createReport = async (req, res) => {
 
         await report.save();
 
-        const baseUrl = `${req.protocol}://${req.get("host")}`;
-        const viewUrl = `${baseUrl}/api/v1/reports/view/${report._id}`;
+        const { viewUrl, downloadUrl } = buildSignedReportLinks(req, report);
 
         res.status(201).json({
             success: true,
@@ -144,7 +184,7 @@ export const createReport = async (req, res) => {
                  * which redirects to a signed Cloudinary delivery URL.
                  */
                 fileUrl: storage === "cloudinary" || storage === "mongodb" ? viewUrl : null,
-                downloadUrl: `${baseUrl}/api/v1/reports/download/${report._id}`,
+                downloadUrl,
                 viewUrl,
                 createdAt: report.createdAt,
             },
@@ -169,10 +209,11 @@ export const downloadReport = async (req, res) => {
                 message: "Report not found",
             });
         }
-        if (!isReportOwner(report, req.user)) {
-            return res.status(403).json({
+        const token = req.query?.access;
+        if (!verifyReportAccessToken(token, report, "download")) {
+            return res.status(401).json({
                 success: false,
-                message: "You are not allowed to access this report",
+                message: "Invalid or expired report access link",
             });
         }
 
@@ -262,10 +303,11 @@ export const viewReport = async (req, res) => {
                 message: "Report not found",
             });
         }
-        if (!isReportOwner(report, req.user)) {
-            return res.status(403).json({
+        const token = req.query?.access;
+        if (!verifyReportAccessToken(token, report, "view")) {
+            return res.status(401).json({
                 success: false,
-                message: "You are not allowed to access this report",
+                message: "Invalid or expired report access link",
             });
         }
 
@@ -362,14 +404,16 @@ export const getAllReports = async (req, res) => {
         res.status(200).json({
             success: true,
             reports: reports.map((report) => {
-                const viewUrl = `${baseUrl}/api/v1/reports/view/${report._id}`;
+                const viewToken = signReportAccessToken(req.user.id, report._id, "view");
+                const downloadToken = signReportAccessToken(req.user.id, report._id, "download");
+                const viewUrl = `${baseUrl}/api/v1/reports/view/${report._id}?access=${encodeURIComponent(viewToken)}`;
                 return {
                     ...report.toObject(),
                     fileUrl:
                         report.storage === "cloudinary" || report.storage === "mongodb"
                             ? viewUrl
                             : report.pdfFileUrl || report.cloudinarySecureUrl || null,
-                    downloadUrl: `${baseUrl}/api/v1/reports/download/${report._id}`,
+                    downloadUrl: `${baseUrl}/api/v1/reports/download/${report._id}?access=${encodeURIComponent(downloadToken)}`,
                     viewUrl,
                 };
             }),
@@ -407,8 +451,7 @@ export const getReportById = async (req, res) => {
             });
         }
 
-        const baseUrl = `${req.protocol}://${req.get("host")}`;
-        const viewUrl = `${baseUrl}/api/v1/reports/view/${report._id}`;
+        const { viewUrl, downloadUrl } = buildSignedReportLinks(req, report);
 
         res.status(200).json({
             success: true,
@@ -418,7 +461,7 @@ export const getReportById = async (req, res) => {
                     report.storage === "cloudinary" || report.storage === "mongodb"
                         ? viewUrl
                         : report.pdfFileUrl || report.cloudinarySecureUrl || null,
-                downloadUrl: `${baseUrl}/api/v1/reports/download/${report._id}`,
+                downloadUrl,
                 viewUrl,
             },
         });
