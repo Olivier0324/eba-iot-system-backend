@@ -313,10 +313,14 @@ export const viewReport = async (req, res) => {
             });
         }
         const token = req.query?.access;
-        if (!verifyReportAccessToken(token, report, "view")) {
+        const canView =
+            verifyReportAccessToken(token, report, "view") ||
+            verifyReportAccessToken(token, report, "download") ||
+            verifyOwnerFromBearerHeader(req.headers.authorization, report);
+        if (!canView) {
             return res.status(401).json({
                 success: false,
-                message: "Invalid or expired report access link",
+                message: "Invalid/expired report link or missing valid auth token",
             });
         }
 
