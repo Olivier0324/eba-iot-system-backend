@@ -11,38 +11,38 @@ import NotificationService from './NotificationService.js';
  */
 const THRESHOLDS = {
     temperature: {
-        warning: 28,      // °C - Threshold where net primary productivity (NPP) begins to decline
-        critical: 32,     // °C - High metabolic stress for native wetland flora
-        emergency: 38,    // °C - Potential for widespread mortality/thermal bleaching of vegetation
+        warning: 30,      // °C - Operational trigger for elevated heat stress
+        critical: 34,     // °C - High heat stress likely across sensitive species
+        emergency: 38,    // °C - Severe heat stress response threshold
         unit: '°C',
         description: 'Microclimate heat stress monitoring'
     },
     humidity: {
-        warning: 80,      // % - Threshold for standard fungal sporulation
-        critical: 85,     // % - Critical risk for invasive pathogens (e.g., Phytophthora)
-        emergency: 92,    // % - Immediate risk of rot and rapid disease spread
+        warning: 75,      // % - Elevated moisture/pathogen risk trigger
+        critical: 85,     // % - High moisture regime with significant pathogen pressure
+        emergency: 92,    // % - Severe moisture regime requiring immediate intervention
         unit: '%',
         description: 'Atmospheric moisture and pathogen risk control'
     },
     co2: {
-        warning: 420,     // ppm - Above current global baseline (~419 ppm); indicates local stagnation
-        critical: 550,    // ppm - Sign of reduced photosynthetic uptake or excessive soil respiration
-        emergency: 700,   // ppm - Severe localized air stagnation affecting plant gas exchange
+        warning: 800,     // ppm - Elevated local accumulation trigger
+        critical: 1200,   // ppm - Strong stagnation/ventilation concern
+        emergency: 2000,  // ppm - Severe stagnation response threshold
         unit: 'ppm',
         description: 'Ecosystem carbon flux and ventilation proxy'
     },
     soil_moisture: {
-        warning: 20,      // % - Initial plant water stress (above wilting point)
-        critical: 12,     // % - Critical drought threshold (θcrit) for arid/semi-arid systems
-        emergency: 8,     // % - Point of no return; permanent wilting and root death
+        warning: 20,      // % - Early drought stress trigger for restoration soils
+        critical: 12,     // % - Severe drought stress with likely vegetation impact
+        emergency: 8,     // % - Extreme dryness requiring immediate irrigation response
         unit: '%',
         direction: 'below',
         description: 'Volumetric Water Content (VWC) for drought resilience'
     },
     water_level: {
-        warning: 75,      // % - Lateral connectivity achieved; potential minor flooding
-        critical: 90,     // % - Risk of over-topping restoration berms/dikes
-        emergency: 98,    // % - Immediate flood threat to adjacent infrastructure
+        warning: 75,      // % - Elevated level requiring closer flood-risk observation
+        critical: 90,     // % - High over-topping risk for berms/drainage controls
+        emergency: 98,    // % - Extreme flood risk requiring immediate response actions
         unit: '%',
         direction: 'above',
         description: 'Wetland hydrological connectivity and flood risk'
@@ -103,13 +103,13 @@ class AlertService {
 
         if (temp >= thresholds.emergency) {
             severity = 'emergency';
-            message = `EMERGENCY: Temperature has reached ${temp}°C at the EbA monitoring site. This exceeds the emergency threshold of ${thresholds.emergency}°C. IMMEDIATE ACTION REQUIRED: Potential for widespread vegetation mortality and thermal bleaching. Activate emergency cooling protocols, deploy rapid response team, and assess ecosystem damage.`;
+            message = `EMERGENCY: Temperature reached ${temp}°C, exceeding the emergency trigger of ${thresholds.emergency}°C. Immediate response required to reduce heat stress impacts on vegetation and restoration assets.`;
         } else if (temp >= thresholds.critical) {
             severity = 'critical';
-            message = `CRITICAL: High temperature detected: ${temp}°C at the restoration site. This exceeds the critical threshold of ${thresholds.critical}°C. High metabolic stress detected for native wetland flora. ACTION REQUIRED: Monitor vegetation stress indicators, increase irrigation frequency, and document heat stress impacts on biodiversity.`;
+            message = `CRITICAL: Temperature is ${temp}°C, above the critical trigger of ${thresholds.critical}°C. Heat stress is likely increasing; apply mitigation actions and inspect sensitive vegetation zones.`;
         } else if (temp >= thresholds.warning) {
             severity = 'warning';
-            message = `WARNING: Elevated temperature: ${temp}°C at the monitoring station. This exceeds the warning threshold of ${thresholds.warning}°C. Net primary productivity (NPP) may be declining. RECOMMENDED ACTION: Monitor temperature trends, ensure adequate soil moisture, and prepare for potential heat stress on vegetation.`;
+            message = `WARNING: Temperature is elevated at ${temp}°C, crossing the warning trigger (${thresholds.warning}°C). Continue close monitoring and verify soil moisture/irrigation readiness.`;
         }
 
         if (severity && await this.shouldCreateAlert('temperature', severity, data.timestamp)) {
@@ -135,13 +135,13 @@ class AlertService {
 
         if (humidity >= thresholds.emergency) {
             severity = 'emergency';
-            message = `EMERGENCY: Humidity level critically high at ${humidity}% at the wetland restoration site. This exceeds the emergency threshold of ${thresholds.emergency}%. IMMEDIATE ACTION REQUIRED: Immediate risk of rot and rapid disease spread. Activate emergency moisture control protocols and inspect vegetation for pathogen outbreaks.`;
+            message = `EMERGENCY: Relative humidity reached ${humidity}%, exceeding the emergency trigger of ${thresholds.emergency}%. Immediate moisture-control response is required due to severe disease and rot risk.`;
         } else if (humidity >= thresholds.critical) {
             severity = 'critical';
-            message = `CRITICAL: High humidity detected: ${humidity}% at the EbA monitoring site. This exceeds the critical threshold of ${thresholds.critical}%. Critical risk for invasive pathogens (e.g., Phytophthora). ACTION REQUIRED: Inspect for fungal diseases, increase air circulation, and monitor sensitive ecosystem components.`;
+            message = `CRITICAL: Relative humidity is ${humidity}%, above the critical trigger of ${thresholds.critical}%. Pathogen pressure is high; inspect vegetation and increase ventilation where possible.`;
         } else if (humidity >= thresholds.warning) {
             severity = 'warning';
-            message = `WARNING: Elevated humidity: ${humidity}% at the restoration site. This exceeds the warning threshold of ${thresholds.warning}%. Threshold for standard fungal sporulation detected. RECOMMENDED ACTION: Monitor microclimate conditions, check for early signs of fungal growth, and track moisture-related vegetation health indicators.`;
+            message = `WARNING: Relative humidity is elevated at ${humidity}%, crossing the warning trigger (${thresholds.warning}%). Monitor for early fungal indicators and track trend persistence.`;
         }
 
         if (severity && await this.shouldCreateAlert('humidity', severity, data.timestamp)) {
@@ -167,13 +167,13 @@ class AlertService {
 
         if (co2 >= thresholds.emergency) {
             severity = 'emergency';
-            message = `EMERGENCY: CO₂ level at ${co2}ppm at the EbA monitoring site. This exceeds the emergency threshold of ${thresholds.emergency}ppm. IMMEDIATE ACTION REQUIRED: Severe localized air stagnation affecting plant gas exchange. Evacuate area if personnel present and activate emergency ventilation assessment.`;
+            message = `EMERGENCY: CO2 concentration reached ${co2}ppm, exceeding the emergency trigger of ${thresholds.emergency}ppm. Immediate response is required for severe air stagnation conditions.`;
         } else if (co2 >= thresholds.critical) {
             severity = 'critical';
-            message = `CRITICAL: CO₂ level at ${co2}ppm at the restoration site. This exceeds the critical threshold of ${thresholds.critical}ppm. Sign of reduced photosynthetic uptake or excessive soil respiration. ACTION REQUIRED: Increase ventilation monitoring, conduct detailed air quality assessment, and monitor vegetation carbon uptake rates.`;
+            message = `CRITICAL: CO2 concentration is ${co2}ppm, above the critical trigger of ${thresholds.critical}ppm. Investigate ventilation and localized accumulation sources promptly.`;
         } else if (co2 >= thresholds.warning) {
             severity = 'warning';
-            message = `WARNING: Elevated CO₂: ${co2}ppm at the monitoring station. This exceeds the warning threshold of ${thresholds.warning}ppm. Above current global baseline (419ppm) indicating local stagnation. RECOMMENDED ACTION: Monitor air quality trends, track carbon sequestration metrics, and assess potential impacts on ecosystem services.`;
+            message = `WARNING: CO2 concentration is elevated at ${co2}ppm, crossing the warning trigger (${thresholds.warning}ppm). Continue trend monitoring and verify airflow conditions.`;
         }
 
         if (severity && await this.shouldCreateAlert('co2', severity, data.timestamp)) {
@@ -199,13 +199,13 @@ class AlertService {
 
         if (moisture <= thresholds.emergency) {
             severity = 'emergency';
-            message = `EMERGENCY: Soil moisture critically low at ${moisture}% at the reforestation site. This is below the emergency threshold of ${thresholds.emergency}%. IMMEDIATE ACTION REQUIRED: Point of no return reached - permanent wilting and root death imminent. Activate emergency irrigation, conduct rapid vegetation health assessment, and implement drought mitigation protocols.`;
+            message = `EMERGENCY: Soil moisture dropped to ${moisture}%, below the emergency trigger of ${thresholds.emergency}%. Immediate irrigation and drought-response actions are required to prevent severe plant loss.`;
         } else if (moisture <= thresholds.critical) {
             severity = 'critical';
-            message = `CRITICAL: Soil moisture very low at ${moisture}% at the EbA restoration site. This is below the critical threshold of ${thresholds.critical}%. Critical drought threshold (θcrit) for arid/semi-arid systems exceeded. ACTION REQUIRED: Initiate immediate irrigation protocols, check irrigation system functionality, and monitor plant stress levels.`;
+            message = `CRITICAL: Soil moisture is ${moisture}%, below the critical trigger of ${thresholds.critical}%. Drought stress is likely escalating; apply irrigation and verify delivery effectiveness.`;
         } else if (moisture <= thresholds.warning) {
             severity = 'warning';
-            message = `WARNING: Low soil moisture: ${moisture}% at the monitoring site. This is below the warning threshold of ${thresholds.warning}%. Initial plant water stress detected (above wilting point). RECOMMENDED ACTION: Schedule irrigation, monitor soil moisture trends closely, and check weather forecast for drought indicators.`;
+            message = `WARNING: Soil moisture is low at ${moisture}%, below the warning trigger (${thresholds.warning}%). Increase observation frequency and prepare irrigation scheduling.`;
         }
 
         if (severity && await this.shouldCreateAlert('soil_moisture', severity, data.timestamp)) {
@@ -231,13 +231,13 @@ class AlertService {
 
         if (waterLevel >= thresholds.emergency) {
             severity = 'emergency';
-            message = `EMERGENCY: Water level critically high at ${waterLevel}% at the wetland restoration site. This exceeds the emergency threshold of ${thresholds.emergency}%. IMMEDIATE ACTION REQUIRED: Immediate flood threat to adjacent infrastructure. Activate emergency flood response, deploy flood control measures, and alert downstream communities.`;
+            message = `EMERGENCY: Water level reached ${waterLevel}%, exceeding the emergency trigger of ${thresholds.emergency}%. Immediate flood response is required to protect restoration assets and nearby infrastructure.`;
         } else if (waterLevel >= thresholds.critical) {
             severity = 'critical';
-            message = `CRITICAL: High water level detected: ${waterLevel}% at the EbA monitoring site. This exceeds the critical threshold of ${thresholds.critical}%. Risk of over-topping restoration berms/dikes. ACTION REQUIRED: Activate flood prevention protocols, inspect drainage and pumping systems, and clear drainage paths.`;
+            message = `CRITICAL: Water level is ${waterLevel}%, above the critical trigger of ${thresholds.critical}%. Overtopping risk is elevated; inspect drainage controls and deploy prevention actions.`;
         } else if (waterLevel >= thresholds.warning) {
             severity = 'warning';
-            message = `WARNING: Water level rising: ${waterLevel}% at the wetland site. This exceeds the warning threshold of ${thresholds.warning}%. Lateral connectivity achieved - potential minor flooding. RECOMMENDED ACTION: Monitor water level trends, check drainage system functionality, and prepare for potential flood management interventions.`;
+            message = `WARNING: Water level is rising at ${waterLevel}%, crossing the warning trigger (${thresholds.warning}%). Track trend progression and prepare flood-management readiness.`;
         }
 
         if (severity && await this.shouldCreateAlert('water_level', severity, data.timestamp)) {
