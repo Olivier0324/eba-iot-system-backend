@@ -302,16 +302,21 @@ export const generatePDF = async (rawData, options) => {
             .stroke();
         currentY += bottomMargin;
     };
-    doc.rect(0, 0, PAGE_W, 90).fill(C.primaryDeep);
-    doc.rect(0, 88, PAGE_W, 3).fill(C.primary);
+    const HEADER_H = 104;
+    doc.rect(0, 0, PAGE_W, HEADER_H).fill(C.primaryDeep);
+    doc.rect(0, HEADER_H - 2, PAGE_W, 3).fill(C.primary);
 
-    // Wide EBA OBSERVA mark: constrain with fit so it stays sharp in the header band.
-    const LOGO_FIT = [168, 54];
-    const TITLE_X = MARGIN + LOGO_FIT[0] + 14;
+    // Wide EBA OBSERVA mark: place on a soft white plate so dark glyphs remain readable on the dark header.
+    const LOGO_FIT = [170, 52];
+    const LOGO_X = MARGIN;
+    const LOGO_Y = 18;
+    const TITLE_X = LOGO_X + LOGO_FIT[0] + 14;
     const logoPath = path.join(process.cwd(), "assets", "logo-report-transparent.png");
     if (fs.existsSync(logoPath)) {
         try {
-            doc.image(logoPath, MARGIN, 16, { fit: LOGO_FIT });
+            doc.roundedRect(LOGO_X - 6, LOGO_Y - 4, LOGO_FIT[0] + 12, LOGO_FIT[1] + 8, 8).fillOpacity(0.96).fill(C.white);
+            doc.fillOpacity(1);
+            doc.image(logoPath, LOGO_X, LOGO_Y, { fit: LOGO_FIT });
         } catch {
             doc.circle(MARGIN + 22, 43, 22).fill(C.primary);
         }
@@ -322,23 +327,29 @@ export const generatePDF = async (rawData, options) => {
             .text("E", MARGIN + 14, 31);
     }
 
-    doc.fillColor(C.white).fontSize(T.h1.size).font(T.h1.font)
-        .text("ENVIRONMENTAL MONITORING REPORT", TITLE_X, 22, { width: PAGE_W - TITLE_X - MARGIN });
-    doc.fillColor(`${C.white}CC`).fontSize(10).font("Helvetica-Bold")
-        .text(`Report Type: ${(type || "CUSTOM").toUpperCase()}  |  Generated: ${new Date().toLocaleString()}`, TITLE_X, 50, {
-            width: PAGE_W - TITLE_X - MARGIN,
+    const headerTitle = "ENVIRONMENTAL MONITORING REPORT";
+    const titleWidth = PAGE_W - TITLE_X - MARGIN;
+    doc.fillColor(C.white).fontSize(16).font(T.h1.font);
+    const titleH = doc.heightOfString(headerTitle, { width: titleWidth, align: "left" });
+    doc.text(headerTitle, TITLE_X, 20, { width: titleWidth, align: "left" });
+
+    const metaY = 20 + titleH + 3;
+    doc.fillColor(`${C.white}D9`).fontSize(10).font("Helvetica-Bold")
+        .text(`Report Type: ${(type || "CUSTOM").toUpperCase()}  |  Generated: ${new Date().toLocaleString()}`, TITLE_X, metaY, {
+            width: titleWidth,
         });
 
     // Metric badge if filtered
     if (metric && metric !== "all") {
         const badge = metric.replace("_ppm", "").replace("_percent", "").toUpperCase();
-        doc.roundedRect(TITLE_X, 64, badge.length * 7 + 16, 16, 4).fill(C.primary);
+        const badgeY = Math.min(metaY + 15, HEADER_H - 18);
+        doc.roundedRect(TITLE_X, badgeY, badge.length * 7 + 16, 16, 4).fill(C.primary);
         doc.fillColor(C.white).fontSize(8).font("Helvetica-Bold")
-            .text(`METRIC: ${badge}`, TITLE_X + 8, 68);
+            .text(`METRIC: ${badge}`, TITLE_X + 8, badgeY + 4);
     }
 
     hasContentOnCurrentPage = true;
-    currentY = 108;
+    currentY = HEADER_H + 14;
 
     // ─────────────────────────────────────────────────────────
     // PRE-COMPUTE STATS
