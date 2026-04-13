@@ -8,9 +8,9 @@ const SensorDataSchema = new mongoose.Schema({
     soil_moisture_percent: Number,
     water_level_percent: Number,
     device_id: String,
-    interval_ms: {  // Add this field
-        type: Number,
-        default: 60000
+    // Keep optional so we do not fabricate intervals when devices omit the field.
+    interval_ms: {
+        type: Number
     },
     timestamp: {
         type: Date,

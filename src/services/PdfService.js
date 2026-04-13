@@ -33,6 +33,17 @@ const calculateStats = (values) => {
     };
 };
 
+const formatInterval = (ms) => {
+    if (ms == null || !Number.isFinite(ms) || ms <= 0) return "--";
+    if (ms < 1000) return `${Math.round(ms)}ms`;
+    const sec = ms / 1000;
+    if (sec < 60) return `${sec % 1 === 0 ? sec.toFixed(0) : sec.toFixed(1)}s`;
+    const min = sec / 60;
+    if (min < 60) return `${min % 1 === 0 ? min.toFixed(0) : min.toFixed(1)}m`;
+    const hr = min / 60;
+    return `${hr % 1 === 0 ? hr.toFixed(0) : hr.toFixed(1)}h`;
+};
+
 const generateAnalysisText = (metrics, selectedMetric) => {
     if (selectedMetric && selectedMetric !== "all") {
         const m = metrics.find(
@@ -303,10 +314,11 @@ export const generatePDF = async (rawData, options) => {
         currentY += bottomMargin;
     };
     const HEADER_H = 104;
-    doc.rect(0, 0, PAGE_W, HEADER_H).fill(C.primaryDeep);
+    const HEADER_BG = "#CFE8D4";
+    doc.rect(0, 0, PAGE_W, HEADER_H).fill(HEADER_BG);
     doc.rect(0, HEADER_H - 2, PAGE_W, 3).fill(C.primary);
 
-    // Wide EBA OBSERVA mark: place on a soft white plate so dark glyphs remain readable on the dark header.
+    // Wide EBA OBSERVA mark on transparent background.
     const LOGO_FIT = [170, 52];
     const LOGO_X = MARGIN;
     const LOGO_Y = 18;
@@ -314,8 +326,6 @@ export const generatePDF = async (rawData, options) => {
     const logoPath = path.join(process.cwd(), "assets", "logo-report-transparent.png");
     if (fs.existsSync(logoPath)) {
         try {
-            doc.roundedRect(LOGO_X - 6, LOGO_Y - 4, LOGO_FIT[0] + 12, LOGO_FIT[1] + 8, 8).fillOpacity(0.96).fill(C.white);
-            doc.fillOpacity(1);
             doc.image(logoPath, LOGO_X, LOGO_Y, { fit: LOGO_FIT });
         } catch {
             doc.circle(MARGIN + 22, 43, 22).fill(C.primary);
@@ -329,12 +339,12 @@ export const generatePDF = async (rawData, options) => {
 
     const headerTitle = "ENVIRONMENTAL MONITORING REPORT";
     const titleWidth = PAGE_W - TITLE_X - MARGIN;
-    doc.fillColor(C.white).fontSize(16).font(T.h1.font);
+    doc.fillColor(C.primaryDeep).fontSize(16).font(T.h1.font);
     const titleH = doc.heightOfString(headerTitle, { width: titleWidth, align: "left" });
     doc.text(headerTitle, TITLE_X, 20, { width: titleWidth, align: "left" });
 
     const metaY = 20 + titleH + 3;
-    doc.fillColor(`${C.white}D9`).fontSize(10).font("Helvetica-Bold")
+    doc.fillColor(C.primaryDark).fontSize(10).font("Helvetica-Bold")
         .text(`Report Type: ${(type || "CUSTOM").toUpperCase()}  |  Generated: ${new Date().toLocaleString()}`, TITLE_X, metaY, {
             width: titleWidth,
         });
@@ -587,7 +597,7 @@ export const generatePDF = async (rawData, options) => {
                     color = val < 20 ? C.alert : C.text;
                     break;
                 case "interval_ms":
-                    display = val != null ? `${(val / 1000).toFixed(0)}s` : "--";
+                    display = formatInterval(val);
                     color = C.textLight;
                     break;
                 default:
