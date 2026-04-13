@@ -8,8 +8,10 @@ import {
     getReportById,
     deleteReport
 } from "../controllers/ReportController.js";
+import { protect } from "../middlewares/AuthMiddleware.js";
 
 const router = express.Router();
+router.use(protect);
 /**
  * @swagger
  * /reports/generate:

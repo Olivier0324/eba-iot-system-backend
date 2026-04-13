@@ -17,6 +17,13 @@ const ReportSchema = new mongoose.Schema({
         default: "daily",
         enum: ["daily", "weekly", "monthly", "custom"]
     },
+    /** User who generated this report. Used to enforce per-user visibility. */
+    createdBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+        required: true,
+        index: true,
+    },
     /**
      * `local`: relative path on disk (`filePath`).
      * `cloudinary`: remote asset; use `cloudinary*` / `pdfFileUrl`.
