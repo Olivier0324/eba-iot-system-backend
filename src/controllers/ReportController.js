@@ -100,6 +100,7 @@ export const createReport = async (req, res) => {
             filename: baseFilename,
             originalFilename: `report_${reportType}_${Date.now()}.pdf`,
             reportType,
+            createdBy: req.user.id,
             storage,
             ...(storage === "cloudinary" && {
                 cloudinaryPublicId,
