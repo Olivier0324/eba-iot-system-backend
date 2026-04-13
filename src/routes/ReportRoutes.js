@@ -11,6 +11,7 @@ import {
 import { protect } from "../middlewares/AuthMiddleware.js";
 
 const router = express.Router();
+router.use(protect);
 /**
  * @swagger
  * /reports/generate:
@@ -65,7 +66,7 @@ const router = express.Router();
  *         description: No data found
  */
 // IMPORTANT: Specific routes MUST come before dynamic routes
-router.get("/generate", protect, createReport);
+router.get("/generate", createReport);
 /**
  * @swagger
  * /reports/download/{id}:
@@ -163,7 +164,7 @@ router.get("/view/:id", viewReport);  // This should work now
  *                   type: object
  */
 // Dynamic routes - these should come AFTER specific routes
-router.get("/", protect, getAllReports);
+router.get("/", getAllReports);
 /**
  * @swagger
  * /reports/{id}:
@@ -195,7 +196,7 @@ router.get("/", protect, getAllReports);
  *       404:
  *         description: Report not found
  */
-router.get("/:id", protect, getReportById);
+router.get("/:id", getReportById);
 /**
  * @swagger
  * /reports/{id}:
@@ -218,6 +219,6 @@ router.get("/:id", protect, getReportById);
  *       404:
  *         description: Report not found
  */
-router.delete("/:id", protect, deleteReport);
+router.delete("/:id", deleteReport);
 
 export default router;

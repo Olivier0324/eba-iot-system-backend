@@ -33,6 +33,11 @@ const usesMongoPdf = (report) => report.storage === "mongodb";
 const reportStorageUsesMongo = () =>
     String(process.env.REPORT_STORAGE || "").toLowerCase() === "mongodb";
 
+const isReportOwner = (report, user) => {
+    const ownerId = report?.createdBy?._id || report?.createdBy;
+    return Boolean(ownerId && user?.id && String(ownerId) === String(user.id));
+};
+
 // Generate and store PDF: REPORT_STORAGE=mongodb → MongoDB; else Cloudinary if configured; else local disk
 export const createReport = async (req, res) => {
     try {
@@ -164,6 +169,12 @@ export const downloadReport = async (req, res) => {
                 message: "Report not found",
             });
         }
+        if (!isReportOwner(report, req.user)) {
+            return res.status(403).json({
+                success: false,
+                message: "You are not allowed to access this report",
+            });
+        }
 
         if (usesCloudinary(report)) {
             try {
@@ -251,6 +262,12 @@ export const viewReport = async (req, res) => {
                 message: "Report not found",
             });
         }
+        if (!isReportOwner(report, req.user)) {
+            return res.status(403).json({
+                success: false,
+                message: "You are not allowed to access this report",
+            });
+        }
 
         if (usesCloudinary(report)) {
             try {
@@ -331,6 +348,7 @@ export const getAllReports = async (req, res) => {
 
         const query = {};
         if (reportType) query.reportType = reportType;
+        query.createdBy = req.user.id;
 
         const reports = await Report.find(query)
             .sort({ createdAt: -1 })
@@ -382,6 +400,12 @@ export const getReportById = async (req, res) => {
                 message: "Report not found",
             });
         }
+        if (!isReportOwner(report, req.user)) {
+            return res.status(403).json({
+                success: false,
+                message: "You are not allowed to access this report",
+            });
+        }
 
         const baseUrl = `${req.protocol}://${req.get("host")}`;
         const viewUrl = `${baseUrl}/api/v1/reports/view/${report._id}`;
@@ -417,6 +441,12 @@ export const deleteReport = async (req, res) => {
             return res.status(404).json({
                 success: false,
                 message: "Report not found",
+            });
+        }
+        if (!isReportOwner(report, req.user)) {
+            return res.status(403).json({
+                success: false,
+                message: "You are not allowed to delete this report",
             });
         }
 
