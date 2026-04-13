@@ -210,7 +210,10 @@ export const downloadReport = async (req, res) => {
             });
         }
         const token = req.query?.access;
-        if (!verifyReportAccessToken(token, report, "download")) {
+        const canDownload =
+            verifyReportAccessToken(token, report, "download") ||
+            verifyReportAccessToken(token, report, "view");
+        if (!canDownload) {
             return res.status(401).json({
                 success: false,
                 message: "Invalid or expired report access link",
