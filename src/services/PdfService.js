@@ -308,7 +308,7 @@ export const generatePDF = async (rawData, options) => {
     // Wide EBA OBSERVA mark: constrain with fit so it stays sharp in the header band.
     const LOGO_FIT = [168, 54];
     const TITLE_X = MARGIN + LOGO_FIT[0] + 14;
-    const logoPath = path.join(process.cwd(), "assets", "logo.png");
+    const logoPath = path.join(process.cwd(), "assets", "logo-report-transparent.png");
     if (fs.existsSync(logoPath)) {
         try {
             doc.image(logoPath, MARGIN, 16, { fit: LOGO_FIT });
