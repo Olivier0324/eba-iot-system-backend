@@ -219,8 +219,7 @@ export const downloadReport = async (req, res) => {
 
         if (usesCloudinary(report)) {
             try {
-                report.downloadCount = (report.downloadCount || 0) + 1;
-                await report.save();
+                await Report.findByIdAndUpdate(id, { $inc: { downloadCount: 1 } });
                 const target = getCloudinaryDownloadRedirectUrl(report);
                 return res.redirect(307, target);
             } catch (e) {
@@ -241,8 +240,7 @@ export const downloadReport = async (req, res) => {
                     message: "Report PDF not found in database",
                 });
             }
-            report.downloadCount = (report.downloadCount || 0) + 1;
-            await report.save();
+            await Report.findByIdAndUpdate(id, { $inc: { downloadCount: 1 } });
             res.setHeader("Content-Type", "application/pdf");
             res.setHeader("Content-Disposition", `attachment; filename="${report.originalFilename}"`);
             res.setHeader("Content-Length", buf.length);
@@ -273,8 +271,7 @@ export const downloadReport = async (req, res) => {
             });
         }
 
-        report.downloadCount = (report.downloadCount || 0) + 1;
-        await report.save();
+        await Report.findByIdAndUpdate(id, { $inc: { downloadCount: 1 } });
 
         res.download(absolutePath, report.originalFilename, (err) => {
             if (err) {
