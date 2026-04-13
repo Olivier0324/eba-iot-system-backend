@@ -527,10 +527,6 @@ export const generatePDF = async (rawData, options) => {
             key: "water_level_percent", label: "Water (%)", baseW: 68,
             show: !metric || metric === "water" || metric === "all"
         },
-        {
-            key: "interval_ms", label: "Interval", baseW: 56,
-            show: !metric || metric === "all"
-        },
     ];
 
     const visCols = allCols.filter((c) => c.key === "timestamp" || c.show);
@@ -595,10 +591,6 @@ export const generatePDF = async (rawData, options) => {
                 case "water_level_percent":
                     display = val != null ? `${val}%` : "--";
                     color = val < 20 ? C.alert : C.text;
-                    break;
-                case "interval_ms":
-                    display = formatInterval(val);
-                    color = C.textLight;
                     break;
                 default:
                     display = (val ?? "--").toString();
